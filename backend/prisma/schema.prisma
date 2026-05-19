@@ -1,0 +1,792 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  OFFICE_OPERATIONS
+  ENGINEER_FIELD
+  FINANCE_ACCOUNTS
+  PRODUCTION
+  CUSTOMER
+}
+
+enum TransitionMethod {
+  NORMAL
+  ADMIN_OVERRIDE
+}
+
+enum OrderStatus {
+  PENDING
+  PRODUCTION_SPECIFICATION
+  PRODUCTION_READY
+  BOOKING
+  INSTALLATION
+  INVOICE
+}
+
+enum QuoteStatus {
+  NEW
+  ACTIVE
+  WON
+  LOST
+}
+
+enum EnquirySource {
+  REFERRAL
+  WEBSITE
+  COLD_CALL
+  REPEAT_CUSTOMER
+  TRADE_SHOW
+  XERO_IMPORT
+  OTHER
+}
+
+enum AssetStatus {
+  LIVE_ACTIVE
+  OVERDUE
+  SERVICE_DUE
+  UNKNOWN
+}
+
+enum AssetPriority {
+  HOT
+  HIGH
+  NORMAL
+}
+
+enum LQStage {
+  LQ
+  SD
+}
+
+enum LQRoutingDecision {
+  PRODUCTION_PACK
+  LIVE_SERVICES
+}
+
+enum DrawingStatus {
+  ISSUED
+  APPROVED
+  REJECTED
+}
+
+enum ReviewStatus {
+  NOT_STARTED
+  IN_REVIEW
+  CUSTOMER_APPROVED
+  CUSTOMER_REJECTED
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+}
+
+enum ServiceQuoteStatus {
+  QUOTE_DRAFTED
+  SENT
+  CHASING
+  ORDER_PLACED
+  LIVE_CLOSED
+}
+
+enum ServiceFrequency {
+  MONTHLY
+  SEMI_ANNUAL
+  ANNUAL
+}
+
+enum XeroDocSource {
+  UPLOAD
+  API
+}
+
+enum MfgStatus {
+  BOOKING_PRODUCTION
+  AWAITING_SMOKE_ALARMS
+  FABRICATION
+  ASSEMBLY
+  QC
+  DISPATCH
+}
+
+enum MfgSource {
+  LG
+  LS
+}
+
+enum ComponentStatus {
+  AWAITING_STOCK_OUT
+  IN_PRODUCTION
+  AWAITING_QC
+  READY_TO_RELEASE
+  MADE_FOR_REUSE
+}
+
+enum SystemFamily {
+  NECO_DC80
+  CSV
+}
+
+enum DistributionType {
+  COLLECTION
+  DELIVERY
+  INSTALLATION
+}
+
+model StageTransitionLog {
+  id               String           @id @default(uuid())
+  recordId         String
+  recordType       String
+  actorId          String
+  actorName        String
+  fromStage        String
+  toStage          String
+  transitionMethod TransitionMethod
+  overrideReason   String?
+  createdAt        DateTime         @default(now())
+
+  @@index([recordId, recordType])
+}
+
+model Customer {
+  id              String   @id @default(uuid())
+  name            String
+  businessName    String?
+  email           String?
+  contactNum      String?
+  accountsContact String?
+  regNumber       String?
+  trustedPayer    Boolean  @default(false)
+  creditLimit     Int      @default(0)
+  billingAddress  String?
+  accountsEmail   String?
+  vatNumber       String?
+  taxReference    String?
+  vatExempt       Boolean  @default(false)
+  vatReverse      Boolean  @default(false)
+  cisDeductions   Boolean  @default(false)
+  cisName         String?
+  cisRate         String?
+  cisOrgType      String?
+  orders          Order[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Order {
+  id                          String      @id @default(uuid())
+  customer                    Customer    @relation(fields: [customerId], references: [id])
+  customerId                  String
+  orderDate                   String?
+  quotationNo                 String?
+  projectName                 String?
+  projectReference            String?
+  siteContactManager          String?
+  siteContactSupervisor       String?
+  status                      OrderStatus @default(PENDING)
+  orderValue                  Float?
+  siteAddress                 String?
+  lastUpdatedBy               String
+  sfclTerms                   String?
+  sfclCreditScore             String?
+  sfclRecommended             String?
+  sfclInsured                 Boolean     @default(false)
+  supply                      String?
+  customerCollection          Boolean     @default(false)
+  deliveryCharge              String?
+  estimatedCollectionDelivery String?
+  estimateProjectCompletion   String?
+  sfclDelivered               String?
+  siteContactManagerNumber    String?
+  siteContactSupervisorNumber String?
+  siteWorkingHours            String?
+
+  pendingPurchaseOrder    Boolean @default(false)
+  pendingSurvey           Boolean @default(false)
+  pendingDrawings         Boolean @default(false)
+  pendingDrawingsApproved Boolean @default(false)
+  pendingDepositPaid      Boolean @default(false)
+  pendingCompleted        Boolean @default(false)
+  pendingOrderPlaced      Boolean @default(false)
+  pendingShippingDetails  Boolean @default(false)
+  pendingInvoices         Boolean @default(false)
+  pendingQuotationDetails Boolean @default(false)
+
+  items     OrderItem[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model ServiceQuote {
+  id                    String              @id @default(uuid())
+  sQuoteRef             String              @unique
+  status                ServiceQuoteStatus  @default(QUOTE_DRAFTED)
+  customerName          String
+  assetId               String?
+  assetRef              String?
+  serviceCategory       String?
+  contractType          String?
+  frequency             ServiceFrequency?
+  numVisits             Int?
+  slaResponse           String?
+  slaResolution         String?
+  autoRenewal           Boolean             @default(false)
+  fabricIncluded        Boolean             @default(false)
+  labourIncluded        Boolean             @default(false)
+  serviceRate           Float?
+  annualRevenueExVat    Float?
+  annualRevenueIncVat   Float?
+  oneOffPayment         Float?
+  paymentTerms          String?
+  pricingHoldUntil      DateTime?
+  contractStart         DateTime?
+  contractEnd           DateTime?
+  probability           Int?
+  xeroSource            XeroDocSource?
+  xeroDocumentKey       String?
+  chaseEntries          ChaseEntry[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+}
+
+model ChaseEntry {
+  id              String       @id @default(uuid())
+  serviceQuoteId  String
+  serviceQuote    ServiceQuote @relation(fields: [serviceQuoteId], references: [id], onDelete: Cascade)
+  chaseDate       DateTime
+  chasedBy        String
+  method          String?
+  outcome         String?
+  nextActionDate  DateTime?
+  createdAt       DateTime     @default(now())
+}
+
+model LiveService {
+  id                    String   @id @default(uuid())
+  lsRef                 String   @unique
+  sourceServiceQuoteId  String?
+  customerName          String
+  assetId               String?
+  serviceDate           DateTime?
+  startTime             String?
+  endTime               String?
+  firmTime              Boolean  @default(false)
+  engineerId            String?
+  engineerName          String?
+  team                  String?
+  hoursPlanned          Float?
+  outOfServiceRequired  Boolean  @default(false)
+  holdRequired          Boolean  @default(false)
+  followUpRequired      Boolean  @default(false)
+  accessNotes           String?
+  ramsUploaded          Boolean  @default(false)
+  ramsReviewed          Boolean  @default(false)
+  inductionRequired     Boolean  @default(false)
+  siteAccessTimes       String?
+  parking               String?
+  pasmaRequired         Boolean  @default(false)
+  heightRequired        Boolean  @default(false)
+  accessAgreed          Boolean  @default(false)
+  harnessRequired       Boolean  @default(false)
+  cameraRequired        Boolean  @default(false)
+  totalComponents       Int      @default(0)
+  toOrderComponents     Int      @default(0)
+  outOfStockComponents  Int      @default(0)
+  estimatedWeight       Float?
+  drawingsAvailable     Boolean  @default(false)
+  methodStatement       Boolean  @default(false)
+  riskAssessment        Boolean  @default(false)
+  prevServiceReport     Boolean  @default(false)
+  sitePhotos            Boolean  @default(false)
+  accountManager        String?
+  accountNumber         String?
+  outstandingBalance    Float?
+  invoiceStatus         String?
+  poNumber              String?
+  warrantyApproved      Boolean  @default(false)
+  creditHold            Boolean  @default(false)
+  specNotes             String?
+  specRequiredBy        DateTime?
+  specPriority          String?
+  step4aPlanComplete        Boolean @default(false)
+  step4aEngineerAllocated   Boolean @default(false)
+  step4aSiteRams            Boolean @default(false)
+  step4aComponentsIdentified Boolean @default(false)
+  step4aEngineeringDocs     Boolean @default(false)
+  step4aFinancialControl    Boolean @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model LiveProject {
+  id                   String             @id @default(uuid())
+  lqRef                String             @unique
+  stage                LQStage            @default(LQ)
+  sourceQuoteId        String?
+  customerName         String
+  customerEmail        String?
+  customerPhone        String?
+  siteAddress          String?
+  siteType             String?
+  supplyType           String?
+  productType          String?
+  widthMm              Int?
+  heightMm             Int?
+  totalContractValue   Float?
+  paidToDate           Float?
+  vatAmount            Float?
+  paymentTerms         String?
+  surveyDate           DateTime?
+  drawingsDue          DateTime?
+  drawingsApprovedDate DateTime?
+  installationBooked   DateTime?
+  expectedCompletion   DateTime?
+  poReceived           Boolean            @default(false)
+  drawingsReceived     Boolean            @default(false)
+  depositPaid          Boolean            @default(false)
+  surveyBooked         Boolean            @default(false)
+  contractApproved     Boolean            @default(false)
+  signatureData        String?
+  surveyCompletionDate DateTime?
+  surveyStatus         String?
+  surveyorName         String?
+  surveyMethod         String?
+  surveyAccessType     String?
+  surveySignedOff      Boolean            @default(false)
+  reviewApprovalDate   DateTime?
+  reviewComments       String?
+  reviewStatus         ReviewStatus       @default(NOT_STARTED)
+  routingDecision      LQRoutingDecision?
+  assigneeId           String?
+  assigneeName         String?
+  invoices             LQInvoice[]
+  drawings             LQDrawing[]
+  installationSchedule LQInstallationItem[]
+  components           LQComponent[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+model LQInvoice {
+  id            String        @id @default(uuid())
+  liveProjectId String
+  liveProject   LiveProject   @relation(fields: [liveProjectId], references: [id], onDelete: Cascade)
+  invoiceNumber String
+  status        InvoiceStatus @default(PENDING)
+  amount        Float
+  dueDate       DateTime?
+  xeroInvoiceId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model LQDrawing {
+  id            String        @id @default(uuid())
+  liveProjectId String
+  liveProject   LiveProject   @relation(fields: [liveProjectId], references: [id], onDelete: Cascade)
+  drawingNumber String
+  description   String?
+  status        DrawingStatus @default(ISSUED)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model LQInstallationItem {
+  id               String      @id @default(uuid())
+  liveProjectId    String
+  liveProject      LiveProject @relation(fields: [liveProjectId], references: [id], onDelete: Cascade)
+  systemName       String
+  installationDate DateTime?
+  commissionDate   DateTime?
+  amount           Float?
+  paid             Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model LQComponent {
+  id            String      @id @default(uuid())
+  liveProjectId String
+  liveProject   LiveProject @relation(fields: [liveProjectId], references: [id], onDelete: Cascade)
+  componentName String
+  qty           Int         @default(1)
+  stockStatus   String      @default("IN_STOCK")
+  cost          Float?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Quote {
+  id               String        @id @default(uuid())
+  quoteRef         String        @unique
+  status           QuoteStatus   @default(NEW)
+  enquirySource    EnquirySource?
+  customerName     String
+  customerEmail    String?
+  customerPhone    String?
+  siteAddress      String?
+  siteType         String?
+  supplyType       String?
+  productType      String?
+  widthMm          Int?
+  heightMm         Int?
+  nextAction       String?
+  nextActionDate   DateTime?
+  assigneeId       String?
+  assigneeName     String?
+  probabilityScore Int?
+  orderValue       Float?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model Asset {
+  id                     String        @id @default(uuid())
+  assetRef               String        @unique
+  status                 AssetStatus   @default(UNKNOWN)
+  priority               AssetPriority @default(NORMAL)
+  lqId                   String?
+  isExternalSource       Boolean       @default(false)
+  customerName           String?
+  siteName               String?
+  siteAddress            String?
+  systemType             String?
+  firingRating           String?
+  locationOnSite         String?
+  headboxSize            String?
+  motorType              String?
+  controlPanelType       String?
+  mccType                String?
+  driveType              String?
+  motorMake              String?
+  serialNumber           String?
+  manufactureDate        DateTime?
+  warrantyExpiry         DateTime?
+  fabricType             String?
+  fabricColour           String?
+  widthMm                Int?
+  heightMm               Int?
+  serviceFrequencyMonths Int?
+  lastServiceDate        DateTime?
+  nextServiceDate        DateTime?
+  renewalAlertDate       DateTime?
+  accessRestrictions     Boolean       @default(false)
+  permitsRequired        Boolean       @default(false)
+  dchiRequired           Boolean       @default(false)
+  securityClearance      Boolean       @default(false)
+  loadingBay             Boolean       @default(false)
+  laddersRequired        Boolean       @default(false)
+  inductionRequired      Boolean       @default(false)
+  lastQuoteDate          DateTime?
+  lastContactDate        DateTime?
+  nextCloseDate          DateTime?
+  contractValue          Float?
+  annualRevenue          Float?
+  contacts               AssetContact[]
+  serviceEvents          AssetServiceEvent[]
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+}
+
+model AssetContact {
+  id        String   @id @default(uuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AssetServiceEvent {
+  id           String    @id @default(uuid())
+  assetId      String
+  asset        Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  serviceDate  DateTime
+  engineerId   String?
+  engineerName String?
+  company      String?
+  summary      String?
+  statusLabel  String?
+  createdAt    DateTime  @default(now())
+}
+
+model OrderItem {
+  id                      String   @id @default(uuid())
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId                 String
+  itemName                String?
+  reference               String?
+  itemQuantity            Int?
+  width                   Int?
+  drop                    Int?
+  cost                    Float?
+  production              Boolean  @default(false)
+  extras                  Json     @default("[]")
+  productionSpecification Json?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// Production Pack (Stage 4)
+model ProductionPack {
+  id              String             @id @default(uuid())
+  packRef         String             @unique
+  liveProjectId   String?
+  liveServiceId   String?
+  status          String             @default("DRAFT")
+  distributionType DistributionType?
+  sentToStage5At  DateTime?
+  systems         ProductionSystem[]
+  mfgJob          ManufacturingJob?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model ProductionSystem {
+  id                String         @id @default(uuid())
+  packId            String
+  pack              ProductionPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  systemIndex       Int            @default(1)
+  family            SystemFamily?
+  variant           String?
+  widthMm           Int?
+  heightMm          Int?
+  customerSupplied  Boolean        @default(false)
+  addManual         Boolean        @default(false)
+  addWarrantyCard   Boolean        @default(false)
+  notes             String?
+  cuttingList       Json?
+  accessories       Json?
+  qrCodeUrl         String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+// Manufacturing (Stage 5)
+model ManufacturingJob {
+  id               String     @id @default(uuid())
+  mfgRef           String     @unique
+  source           MfgSource  @default(LG)
+  status           MfgStatus  @default(BOOKING_PRODUCTION)
+  packId           String?    @unique
+  pack             ProductionPack? @relation(fields: [packId], references: [id])
+  liveProjectId    String?
+  liveServiceId    String?
+  customerName     String?
+  siteName         String?
+  description      String?
+  priority         String?
+  requiredByDate   DateTime?
+  engineerName     String?
+  specNotes        String?
+  specRequiredBy   DateTime?
+  specPriority     String?
+  approvedBy       String?
+  authorisedBy     String?
+  allComponentsDone Boolean   @default(false)
+  qcFormsUploaded  Boolean   @default(false)
+  stampChecked     Boolean   @default(false)
+  productionDocsDone Boolean @default(false)
+  components       MfgComponent[]
+  fabricRows       MfgFabricRow[]
+  qcCheckpoints    MfgQcCheckpoint[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model MfgComponent {
+  id             String          @id @default(uuid())
+  jobId          String
+  job            ManufacturingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  name           String
+  status         ComponentStatus @default(AWAITING_STOCK_OUT)
+  category       String?
+  requiredByDate DateTime?
+  quantity       Int             @default(1)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model MfgFabricRow {
+  id         String          @id @default(uuid())
+  jobId      String
+  job        ManufacturingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  systemRef  String?
+  widthMm    Int?
+  dropMm     Int?
+  material   String?
+  quantity   Int             @default(1)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model MfgQcCheckpoint {
+  id        String          @id @default(uuid())
+  jobId     String
+  job       ManufacturingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  label     String
+  checked   Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+// Distribution & Installation (Stages 6A–6C)
+
+enum PaymentMilestoneStatus {
+  PENDING
+  PAID
+}
+
+model DistributionJob {
+  id                     String           @id @default(uuid())
+  djRef                  String           @unique
+  distributionType       DistributionType
+  mfgJobId               String?
+  liveProjectId          String?
+  liveServiceId          String?
+  customerName           String?
+  siteName               String?
+
+  // 6A — Collection
+  accountsReleaseApproved   Boolean        @default(false)
+  accountsReleaseApprovedBy String?
+  packMccCert               Boolean        @default(false)
+  packCurtainScope          Boolean        @default(false)
+  packFiringLicence         Boolean        @default(false)
+  packLabelsId              Boolean        @default(false)
+  packControllersManual     Boolean        @default(false)
+  packWarrantyCert          Boolean        @default(false)
+  collectionSignature       String?
+  collectedAt               DateTime?
+  collectionRep             String?
+  pocGenerated              Boolean        @default(false)
+
+  // 6B — Delivery
+  despatchDate              DateTime?
+  carrier                   String?
+  trackingNumber            String?
+  palletBoxCount            Int?
+  trackingLink              String?
+  despatchNotes             String?
+  deliveryMccCert           Boolean        @default(false)
+  deliveryCurtainScope      Boolean        @default(false)
+  deliveryFiringLicence     Boolean        @default(false)
+  deliveryLabelsId          Boolean        @default(false)
+  deliveryControllersManual Boolean        @default(false)
+  deliveryWarrantyCert      Boolean        @default(false)
+  deliverySignature         String?
+  deliverySignedOffAt       DateTime?
+  podGenerated              Boolean        @default(false)
+  courierName               String?
+  driverName                String?
+
+  // 6C — Installation
+  ramsUploaded              Boolean        @default(false)
+  ramsReviewed              Boolean        @default(false)
+  dateIn                    DateTime?
+  daysOnSite                Int?
+  estimatedCompletion       DateTime?
+  extendedFlag              Boolean        @default(false)
+  returnVisit               Boolean        @default(false)
+  ramsFiledChecked          Boolean        @default(false)
+  teamSignedOffChecked      Boolean        @default(false)
+  customerSignoffUploaded   Boolean        @default(false)
+  handoverPackIssued        Boolean        @default(false)
+  returnVisitResolved       Boolean        @default(false)
+  commissionDate            DateTime?
+
+  awaitingInvoice           Boolean        @default(false)
+  certificatesReleased      Boolean        @default(false)
+  certificateReleasedBy     String?
+  djStatus                  String         @default("PENDING")
+  engineers         InstallationEngineer[]
+  milestones        PaymentMilestone[]
+  progressSteps     InstallationProgressStep[]
+  documents         DistributionDocument[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model InstallationEngineer {
+  id             String          @id @default(uuid())
+  djId           String
+  job            DistributionJob @relation(fields: [djId], references: [id], onDelete: Cascade)
+  engineerName   String
+  engineerId     String?
+  signOnTime     String?
+  overnight      Boolean         @default(false)
+  miles          Float?
+  travelCost     Float?
+  nightRate      Float?
+  offSpecRate    Float?
+  hotelCost      Float?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model PaymentMilestone {
+  id           String                  @id @default(uuid())
+  djId         String
+  job          DistributionJob         @relation(fields: [djId], references: [id], onDelete: Cascade)
+  name         String
+  amount       Float?
+  triggerEvent String?
+  status       PaymentMilestoneStatus  @default(PENDING)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+}
+
+model InstallationProgressStep {
+  id        String          @id @default(uuid())
+  djId      String
+  job       DistributionJob @relation(fields: [djId], references: [id], onDelete: Cascade)
+  stepName  String
+  stepDate  DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model DistributionDocument {
+  id        String          @id @default(uuid())
+  djId      String
+  job       DistributionJob @relation(fields: [djId], references: [id], onDelete: Cascade)
+  docType   String
+  fileName  String
+  s3Key     String?
+  uploadedAt DateTime       @default(now())
+}
+
+model StaffMember {
+  id        String   @id @default(uuid())
+  name      String
+  role      String
+  email     String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Part {
+  id          String   @id @default(uuid())
+  partRef     String   @unique
+  name        String
+  category    String
+  description String?
+  unitCost    Float?
+  unit        String?
+  supplier    String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

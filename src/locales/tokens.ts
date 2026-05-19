@@ -1,0 +1,43 @@
+export const tokens = {
+  common: {
+    languageChanged: 'common.languageChanged'
+  },
+  nav: {
+    account: 'nav.account',
+    auth: 'nav.auth',
+    browse: 'nav.browse',
+    calendar: 'nav.calendar',
+    checkout: 'nav.checkout',
+    concepts: 'nav.concepts',
+    contact: 'nav.contact',
+    create: 'nav.create',
+    customers: 'nav.customers',
+    dashboard: 'nav.dashboard',
+    details: 'nav.details',
+    edit: 'nav.edit',
+    error: 'nav.error',
+    feed: 'nav.feed',
+    fileManager: 'nav.fileManager',
+    files: 'nav.files',
+    finance: 'nav.finance',
+    fleet: 'nav.fleet',
+    forgotPassword: 'nav.forgotPassword',
+    list: 'nav.list',
+    login: 'nav.login',
+    management: 'nav.management',
+    orderList: 'nav.orders',
+    overview: 'nav.overview',
+    pages: 'nav.pages',
+    postCreate: 'nav.postCreate',
+    postDetails: 'nav.postDetails',
+    postList: 'nav.postList',
+    pricing: 'nav.pricing',
+    productList: 'nav.products',
+    profile: 'nav.profile',
+    register: 'nav.register',
+    resetPassword: 'nav.resetPassword',
+    verifyCode: 'nav.verifyCode',
+    production: 'nav.production',
+    pending: 'nav.pending'
+  }
+};
