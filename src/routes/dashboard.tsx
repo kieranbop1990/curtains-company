@@ -38,6 +38,10 @@ const DistributionDetailPage = lazy(() => import('src/pages/dashboard/distributi
 const OperationsDashboardPage = lazy(() => import('src/pages/dashboard/operations/index'));
 const InstallationCalendarPage = lazy(() => import('src/pages/dashboard/operations/calendar'));
 
+// Admin
+const StaffDirectoryPage = lazy(() => import('src/pages/dashboard/admin/staff'));
+const PartsLibraryPage = lazy(() => import('src/pages/dashboard/admin/parts'));
+
 const dashboardChildren = [
   {
     index: true,
@@ -99,6 +103,13 @@ const dashboardChildren = [
     children: [
       { index: true, element: <Suspense fallback={null}><OperationsDashboardPage /></Suspense> },
       { path: 'calendar', element: <Suspense fallback={null}><InstallationCalendarPage /></Suspense> },
+    ]
+  },
+  {
+    path: 'admin',
+    children: [
+      { path: 'staff', element: <Suspense fallback={null}><StaffDirectoryPage /></Suspense> },
+      { path: 'parts', element: <Suspense fallback={null}><PartsLibraryPage /></Suspense> },
     ]
   },
 ];

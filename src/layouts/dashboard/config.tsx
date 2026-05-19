@@ -7,6 +7,7 @@ import File01Icon from 'src/icons/untitled-ui/duocolor/file-01';
 import HomeSmileIcon from 'src/icons/untitled-ui/duocolor/home-smile';
 import ShoppingBag03Icon from 'src/icons/untitled-ui/duocolor/shopping-bag-03';
 import Upload04Icon from 'src/icons/untitled-ui/duocolor/upload-04';
+import Users03Icon from 'src/icons/untitled-ui/duocolor/users-03';
 import { paths } from 'src/paths';
 
 export interface Item {
@@ -77,6 +78,21 @@ export const useSections = () => {
           title: 'Installation Calendar',
           path: paths.dashboard.operations.calendar,
           icon: <SvgIcon fontSize="small"><CalendarIcon /></SvgIcon>
+        },
+      ]
+    },
+    {
+      subheader: 'Admin',
+      items: [
+        {
+          title: 'Staff Directory',
+          path: paths.dashboard.admin.staff,
+          icon: <SvgIcon fontSize="small"><Users03Icon /></SvgIcon>
+        },
+        {
+          title: 'Parts Library',
+          path: paths.dashboard.admin.parts,
+          icon: <SvgIcon fontSize="small"><ShoppingBag03Icon /></SvgIcon>
         },
       ]
     },

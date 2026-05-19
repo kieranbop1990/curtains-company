@@ -15,6 +15,8 @@ import { serviceQuotesRoutes, liveServicesRoutes } from './routes/service-quotes
 import { productionPackRoutes, manufacturingRoutes } from './routes/production-pack.js';
 import { distributionRoutes } from './routes/distribution.js';
 import { fieldEngineerRoutes } from './routes/field-engineer.js';
+import { staffRoutes } from './routes/staff.js';
+import { partsRoutes } from './routes/parts.js';
 
 export const app = new Hono();
 
@@ -51,3 +53,5 @@ app.route('/api/production-packs', productionPackRoutes);
 app.route('/api/manufacturing-jobs', manufacturingRoutes);
 app.route('/api/distribution-jobs', distributionRoutes);
 app.route('/api/field-engineer', fieldEngineerRoutes);
+app.route('/api/staff', staffRoutes);
+app.route('/api/parts', partsRoutes);

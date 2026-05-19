@@ -45,6 +45,10 @@ export const paths = {
       index: '/dashboard/operations',
       calendar: '/dashboard/operations/calendar',
     },
+    admin: {
+      staff: '/dashboard/admin/staff',
+      parts: '/dashboard/admin/parts',
+    },
   },
   notAuthorized: '/401',
   notFound: '/404',
