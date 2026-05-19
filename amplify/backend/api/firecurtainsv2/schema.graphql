@@ -1,0 +1,90 @@
+type Pending @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  purchaseOrder: Boolean
+  survey: Boolean
+  drawingsApproved: Boolean
+  drawings: Boolean
+  completed: Boolean
+  depositPaid: Boolean
+  orderPlaced: Boolean
+  shippingDetails: Boolean
+  invoices: Boolean
+  quotationDetails: Boolean
+}
+
+type OrderInf @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  itemName: String
+  itemQuantity: Int
+  width: Int
+  drop: Int
+  cost: Float
+  ordersID: ID! @index(name: "byOrders")
+  reference: String
+  production: Boolean
+  extras: [AWSJSON]
+  productionSpecification: AWSJSON
+}
+
+enum Status {
+  PENDING
+  PRODUCTION_READY
+  BOOKING
+  INSTALLATION
+  INVOICE
+  PRODUCTION_SPECIFICATION
+}
+
+type Orders @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  orderDate: AWSDate
+  quotationNo: String
+  projectName: String
+  projectReference: String
+  siteContactManager: String
+  siteContactSupervisor: String
+  status: Status
+  orderValue: Float
+  siteAddress: String
+  customersID: ID! @index(name: "byCustomers")
+  OrderInfs: [OrderInf] @hasMany(indexName: "byOrders", fields: ["id"])
+  lastUpdatedBy: String!
+  Pending: Pending @hasOne
+  sfclTerms: String
+  sfclCreditScore: String
+  sfclRecommended: String
+  sfclInsured: Boolean
+  supply: String
+  customerCollection: Boolean
+  deliveryCharge: String
+  estimatedCollectionDelivery: AWSDate
+  estimateProjectCompletion: AWSDate
+  sfclDelivered: String
+  siteContactManagerNumber: String
+  siteContactSupervisorNumber: String
+  siteWorkingHours: String
+}
+
+type Customers @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  customer: String!
+  businessName: String
+  email: String
+  contactNum: String
+  accountsContact: String
+  regNumber: String
+  trustedPayer: Boolean
+  creditLimit: Int
+  Orders: [Orders] @hasMany(indexName: "byCustomers", fields: ["id"])
+  billingAddress: String
+  accountsEmail: String
+  vatNumber: String
+  taxReference: String
+  vatExempt: Boolean
+  vatReverse: Boolean
+  cisDeductions: Boolean
+  cisName: String
+  cisRate: String
+  cisOrgType: String
+}
+ 

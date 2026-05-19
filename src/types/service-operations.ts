@@ -1,0 +1,100 @@
+export type ServiceQuoteStatus = 'QUOTE_DRAFTED' | 'SENT' | 'CHASING' | 'ORDER_PLACED' | 'LIVE_CLOSED';
+export type ServiceFrequency = 'MONTHLY' | 'SEMI_ANNUAL' | 'ANNUAL';
+
+export interface ChaseEntry {
+  id: string;
+  chaseDate: string;
+  chasedBy: string;
+  method: string;
+  outcome: string;
+  nextActionDate: string | null;
+}
+
+export interface ServiceQuote {
+  id: string;
+  sQuoteRef: string;
+  status: ServiceQuoteStatus;
+  customerName: string;
+  assetId: string | null;
+  assetRef: string;
+  serviceCategory: string;
+  contractType: string;
+  frequency: ServiceFrequency | null;
+  numVisits: number | null;
+  slaResponse: string;
+  slaResolution: string;
+  autoRenewal: boolean;
+  fabricIncluded: boolean;
+  labourIncluded: boolean;
+  serviceRate: number | null;
+  annualRevenueExVat: number | null;
+  annualRevenueIncVat: number | null;
+  oneOffPayment: number | null;
+  paymentTerms: string;
+  pricingHoldUntil: string | null;
+  contractStart: string | null;
+  contractEnd: string | null;
+  probability: number | null;
+  xeroSource: string | null;
+  xeroDocumentKey: string | null;
+  chaseEntries: ChaseEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveService {
+  id: string;
+  lsRef: string;
+  sourceServiceQuoteId: string | null;
+  customerName: string;
+  assetId: string | null;
+  serviceDate: string | null;
+  startTime: string;
+  endTime: string;
+  firmTime: boolean;
+  engineerId: string;
+  engineerName: string;
+  team: string;
+  hoursPlanned: number | null;
+  outOfServiceRequired: boolean;
+  holdRequired: boolean;
+  followUpRequired: boolean;
+  accessNotes: string;
+  ramsUploaded: boolean;
+  ramsReviewed: boolean;
+  inductionRequired: boolean;
+  siteAccessTimes: string;
+  parking: string;
+  pasmaRequired: boolean;
+  heightRequired: boolean;
+  accessAgreed: boolean;
+  harnessRequired: boolean;
+  cameraRequired: boolean;
+  totalComponents: number;
+  toOrderComponents: number;
+  outOfStockComponents: number;
+  estimatedWeight: number | null;
+  drawingsAvailable: boolean;
+  methodStatement: boolean;
+  riskAssessment: boolean;
+  prevServiceReport: boolean;
+  sitePhotos: boolean;
+  accountManager: string;
+  accountNumber: string;
+  outstandingBalance: number | null;
+  invoiceStatus: string;
+  poNumber: string;
+  warrantyApproved: boolean;
+  creditHold: boolean;
+  specNotes: string;
+  specRequiredBy: string | null;
+  specPriority: string;
+  step4aPlanComplete: boolean;
+  step4aEngineerAllocated: boolean;
+  step4aSiteRams: boolean;
+  step4aComponentsIdentified: boolean;
+  step4aEngineeringDocs: boolean;
+  step4aFinancialControl: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
