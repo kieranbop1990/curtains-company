@@ -8,6 +8,7 @@ import HomeSmileIcon from 'src/icons/untitled-ui/duocolor/home-smile';
 import ShoppingBag03Icon from 'src/icons/untitled-ui/duocolor/shopping-bag-03';
 import Upload04Icon from 'src/icons/untitled-ui/duocolor/upload-04';
 import Users03Icon from 'src/icons/untitled-ui/duocolor/users-03';
+import { IconHelp } from '@tabler/icons-react';
 import { paths } from 'src/paths';
 
 export interface Item {
@@ -93,6 +94,15 @@ export const useSections = () => {
           title: 'Parts Library',
           path: paths.dashboard.admin.parts,
           icon: <SvgIcon fontSize="small"><ShoppingBag03Icon /></SvgIcon>
+        },
+      ]
+    },
+    {
+      items: [
+        {
+          title: 'How It Works',
+          path: paths.howTo,
+          icon: <IconHelp size={20} />
         },
       ]
     },

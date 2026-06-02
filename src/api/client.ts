@@ -1,14 +1,14 @@
-import Auth from '@aws-amplify/auth';
+import { userManager } from 'src/lib/user-manager';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
-    const session = await Auth.currentSession();
-    const token = session.getIdToken().getJwtToken();
+    const user = await userManager.getUser();
+    if (!user || user.expired) return { 'Content-Type': 'application/json' };
     return {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${user.id_token}`,
     };
   } catch {
     return { 'Content-Type': 'application/json' };

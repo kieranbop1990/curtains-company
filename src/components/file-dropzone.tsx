@@ -22,7 +22,12 @@ import Alert from '@mui/material/Alert';
 
 import {FileIcon} from 'src/components/file-icon';
 import {bytesToSize} from 'src/utils/bytes-to-size';
-import { CustomFile } from './list-files';
+
+export interface CustomFile {
+  name: string;
+  type: string;
+  path?: string;
+}
 import { getUploadUrl } from 'src/api/file-manager';
 
 export type File = FileWithPath;

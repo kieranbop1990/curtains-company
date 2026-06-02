@@ -19,7 +19,62 @@ Internal CRM managing the full job lifecycle: quotes → live projects → produ
 
 The frontend (Vite/React) talks to a Hono REST API over HTTP. The API validates Cognito JWTs, talks to PostgreSQL via Prisma, and delegates file operations to S3 via presigned URLs so credentials never reach the browser. Emails go through SES; invoice sync uses the Xero OAuth API. A service worker at `public/sw.js` enables offline capability for the field engineer PWA.
 
-Six roles are enforced via JWT claims: Admin, Office/Operations, Engineer (Field), Finance/Accounts, Production, and Customer. Set `DEV_SKIP_AUTH=true` in the backend to bypass auth and run as Admin locally.
+Six roles are enforced via JWT claims on every `/api/*` request. The frontend currently gates access only by authentication (any valid role can see all pages); the API enforces the granular per-route restrictions below. Set `DEV_SKIP_AUTH=true` in the backend to bypass auth and run as Admin locally.
+
+## Roles & Permissions
+
+Roles are stored as the custom Cognito attribute `custom:role` and included in every ID token. The backend reads this claim on every authenticated request and returns `403` if the role isn't permitted.
+
+### Role definitions
+
+| Role | `custom:role` value | Who it's for |
+|------|---------------------|--------------|
+| Admin | `ADMIN` | Full access; bypasses all role checks |
+| Office / Operations | `OFFICE_OPERATIONS` | Day-to-day CRM users — quotes, projects, service, assets |
+| Field Engineer | `ENGINEER_FIELD` | Mobile/PWA access to their own installation jobs |
+| Finance / Accounts | `FINANCE_ACCOUNTS` | Invoice approval, financial sign-off, parts read |
+| Production | `PRODUCTION` | Parts library read/write, manufacturing visibility |
+| Customer | `CUSTOMER` | Reserved for future customer-facing portal |
+
+### What each role can call
+
+| Area | ADMIN | OFFICE_OPS | ENGINEER_FIELD | FINANCE | PRODUCTION | CUSTOMER |
+|------|:-----:|:----------:|:--------------:|:-------:|:----------:|:--------:|
+| Quotes | ✓ | ✓ | — | — | — | — |
+| Live Projects | ✓ | ✓ | — | — | — | — |
+| Service Quotes / Live Services | ✓ | ✓ | — | — | — | — |
+| Assets | ✓ | ✓ | — | — | — | — |
+| Manufacturing / Production Packs | ✓ | ✓ | — | — | — | — |
+| Distribution | ✓ | ✓ | — | — | — | — |
+| Distribution — financial release | ✓ | — | — | ✓ | — | — |
+| Field Engineer jobs (own only) | ✓ | — | ✓ | — | — | — |
+| Parts — read | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Parts — write / delete | ✓ | ✓ | — | — | ✓ | — |
+| Staff directory — read | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Staff directory — write | ✓ | ✓ | — | — | — | — |
+| Audit log | ✓ | ✓ | — | — | — | — |
+| Formula / admin tools | ✓ | — | — | — | — | — |
+
+Permission sets are defined in `backend/src/lib/permissions.ts`.
+
+### Setting a role on a Cognito user
+
+Roles are managed via **Cognito Groups**. The ID token automatically includes a `cognito:groups` claim listing all groups the user belongs to. The API reads the first group that matches a valid role name.
+
+**One-time group setup** (do this once per User Pool):
+1. AWS Console → Cognito → `eu-west-2_DLWfbFCHS` → **Groups** → Create group
+2. Create one group for each role value: `ADMIN`, `OFFICE_OPERATIONS`, `ENGINEER_FIELD`, `FINANCE_ACCOUNTS`, `PRODUCTION`, `CUSTOMER`
+
+**Assigning a role to a user:**
+1. AWS Console → Cognito → `eu-west-2_DLWfbFCHS` → **Users** → click the user
+2. **Add user to group** → select the appropriate group
+3. The user must sign out and back in to get a fresh token with the updated `cognito:groups` claim
+
+### Frontend role enforcement (current state)
+
+The `RoleGuard` component and `useUserRole` hook exist in `src/components/RoleGuard/` and can gate any UI element by role. Currently, navigation and page routes are **auth-only** — any valid role sees all pages. The API will reject unauthorised calls with `403`, so the data simply won't load for roles that lack access. Role-based nav filtering is the next step if needed.
+
+---
 
 ## Project Structure
 

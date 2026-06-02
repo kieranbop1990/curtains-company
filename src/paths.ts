@@ -1,13 +1,14 @@
 export const paths = {
   index: '/',
   auth: {
+    callback: '/auth/callback',
     amplify: {
       confirmRegister: '/auth/amplify/confirm-register',
       forgotPassword: '/auth/amplify/forgot-password',
       login: '/auth/amplify/login',
       register: '/auth/amplify/register',
-      resetPassword: '/auth/amplify/reset-password'
-    }
+      resetPassword: '/auth/amplify/reset-password',
+    },
   },
   dashboard: {
     index: '/dashboard/operations',
@@ -50,6 +51,7 @@ export const paths = {
       parts: '/dashboard/admin/parts',
     },
   },
+  howTo: '/dashboard/how-to',
   notAuthorized: '/401',
   notFound: '/404',
   serverError: '/500'

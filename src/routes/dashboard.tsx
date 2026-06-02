@@ -42,6 +42,9 @@ const InstallationCalendarPage = lazy(() => import('src/pages/dashboard/operatio
 const StaffDirectoryPage = lazy(() => import('src/pages/dashboard/admin/staff'));
 const PartsLibraryPage = lazy(() => import('src/pages/dashboard/admin/parts'));
 
+// How To
+const HowToPage = lazy(() => import('src/pages/dashboard/how-to'));
+
 const dashboardChildren = [
   {
     index: true,
@@ -111,6 +114,10 @@ const dashboardChildren = [
       { path: 'staff', element: <Suspense fallback={null}><StaffDirectoryPage /></Suspense> },
       { path: 'parts', element: <Suspense fallback={null}><PartsLibraryPage /></Suspense> },
     ]
+  },
+  {
+    path: 'how-to',
+    element: <Suspense fallback={null}><HowToPage /></Suspense>
   },
 ];
 

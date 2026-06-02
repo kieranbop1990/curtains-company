@@ -1,8 +1,6 @@
 import { useContext } from 'react';
 
-import type { AuthContextType as AmplifyAuthContextType } from 'src/contexts/auth/amplify-context';
-import { AuthContext } from 'src/contexts/auth/amplify-context';
-
-type AuthContextType = AmplifyAuthContextType;
+import type { AuthContextType } from 'src/contexts/auth/oidc-context';
+import { AuthContext } from 'src/contexts/auth/oidc-context';
 
 export const useAuth = <T = AuthContextType>() => useContext(AuthContext) as T;

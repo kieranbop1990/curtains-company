@@ -21,13 +21,16 @@ import { partsRoutes } from './routes/parts.js';
 export const app = new Hono();
 
 app.use('*', logger());
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+];
+
 app.use(
   '*',
   cors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:3000',
-    ],
+    origin: allowedOrigins,
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

@@ -56,8 +56,9 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   try {
     const payload = await getVerifier().verify(token);
-    const rawRole = (payload as Record<string, unknown>)['custom:role'];
-    if (!isValidRole(rawRole)) {
+    const groups = (payload as Record<string, unknown>)['cognito:groups'];
+    const rawRole = Array.isArray(groups) ? groups.find(isValidRole) : undefined;
+    if (!rawRole) {
       return c.json({ error: 'Invalid or missing role claim' }, 403);
     }
     c.set('user', {

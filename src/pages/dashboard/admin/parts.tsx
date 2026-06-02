@@ -260,7 +260,7 @@ export default function PartsLibraryPage() {
               decimalScale={2}
               min={0}
               value={form.unitCost}
-              onChange={v => setForm(f => ({ ...f, unitCost: v }))}
+              onChange={v => setForm(f => ({ ...f, unitCost: typeof v === 'number' ? v : '' }))}
             />
             <TextInput
               label="Unit"

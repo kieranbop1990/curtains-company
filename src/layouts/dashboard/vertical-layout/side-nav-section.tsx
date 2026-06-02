@@ -1,3 +1,4 @@
+import React from 'react';
 import type { FC, ReactNode } from 'react';
 import PropTypes from 'prop-types';
 import Box from '@mui/material/Box';
@@ -23,8 +24,8 @@ const renderItems = ({
   depth?: number;
   items: Item[];
   pathname?: string | null;
-}): JSX.Element[] => items.reduce(
-  (acc: JSX.Element[], item) => reduceChildRoutes({
+}): React.JSX.Element[] => items.reduce(
+  (acc: React.JSX.Element[], item) => reduceChildRoutes({
     acc,
     depth,
     item,
@@ -39,11 +40,11 @@ const reduceChildRoutes = ({
   item,
   pathname
 }: {
-  acc: JSX.Element[];
+  acc: React.JSX.Element[];
   depth: number;
   item: Item;
   pathname?: string | null;
-}): Array<JSX.Element> => {
+}): Array<React.JSX.Element> => {
   const checkPath = !!(item.path && pathname);
   const partialMatch = checkPath ? pathname.includes(item.path!) : false;
   const exactMatch = checkPath ? pathname === item.path : false;

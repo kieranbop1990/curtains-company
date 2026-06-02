@@ -2,13 +2,6 @@ import type { FC, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useAuth } from 'src/hooks/use-auth';
-import { useRouter } from 'src/hooks/use-router';
-import { paths } from 'src/paths';
-import { Issuer } from 'src/utils/auth';
-
-const loginPaths: Record<Issuer, string> = {
-  [Issuer.Amplify]: paths.auth.amplify.login,
-};
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -16,41 +9,28 @@ interface AuthGuardProps {
 
 export const AuthGuard: FC<AuthGuardProps> = (props) => {
   const { children } = props;
-  const router = useRouter();
-  const { isAuthenticated, issuer } = useAuth();
+  const { isAuthenticated, signIn } = useAuth();
   const skipAuth = import.meta.env.VITE_AUTH_SKIP === 'true';
   const [checked, setChecked] = useState<boolean>(skipAuth);
 
-  const check = useCallback(
-    () => {
-      if (!isAuthenticated) {
-        const searchParams = new URLSearchParams({ returnTo: window.location.pathname }).toString();
-        const href = loginPaths[issuer] + `?${searchParams}`;
-        router.replace(href);
-      } else {
-        setChecked(true);
-      }
-    },
-    [isAuthenticated, issuer, router]
-  );
+  const check = useCallback(() => {
+    if (!isAuthenticated) {
+      signIn();
+    } else {
+      setChecked(true);
+    }
+  }, [isAuthenticated, signIn]);
 
-  // Only check on mount, this allows us to redirect the user manually when auth state changes
-  useEffect(
-    () => {
-      if (!skipAuth) {
-        check();
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  useEffect(() => {
+    if (!skipAuth) {
+      check();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!checked) {
     return null;
   }
-
-  // If got here, it means that the redirect did not occur, and that tells us that the user is
-  // authenticated / authorized.
 
   return <>{children}</>;
 };

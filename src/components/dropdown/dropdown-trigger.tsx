@@ -4,8 +4,13 @@ import PropTypes from 'prop-types';
 
 import { DropdownContext } from './dropdown-context';
 
+interface TriggerProps {
+  onMouseEnter?: (event: MouseEvent<HTMLElement>) => void;
+  onMouseLeave?: (event: MouseEvent<HTMLElement>) => void;
+}
+
 interface DropdownButtonProps {
-  children: ReactElement;
+  children: ReactElement<TriggerProps>;
 }
 
 export const DropdownTrigger: FC<DropdownButtonProps> = (props) => {

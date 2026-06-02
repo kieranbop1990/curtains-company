@@ -2,151 +2,196 @@
 
 ## Architecture
 
-| Component | Service | Notes |
-|-----------|---------|-------|
-| React frontend | **Vercel** | Auto-deploys from GitHub |
-| Hono REST API | **Railway** | Auto-deploys from GitHub |
-| PostgreSQL | **Railway** | Managed add-on, one click |
-| Auth | **AWS Cognito** | Free up to 50k users, already coded |
-| File storage | **AWS S3** | Presigned URL uploads |
-| Email | **AWS SES** | Transactional email |
-
-You use AWS for **services only** (auth, files, email) — not for hosting. Hosting is Railway + Vercel.
+| Component | Service |
+|-----------|---------|
+| React frontend | Railway (static via `serve`) |
+| Hono REST API | Railway (Docker) |
+| PostgreSQL | Railway (managed) |
+| Auth | AWS Cognito (OIDC via `react-oidc-context`) |
+| File storage | AWS S3 |
+| Email | AWS SES |
 
 ---
 
-## Phase 1 — AWS: Cognito + S3 (one-time setup)
+## Phase 1 — AWS: Cognito (one-time setup)
 
-The `amplify/` directory already contains the Cognito and S3 resource definitions. Deploy them once:
+Cognito is already provisioned. No Amplify CLI required — auth now uses the Cognito hosted UI via standard OIDC.
 
-```bash
-npm install -g @aws-amplify/cli   # if not installed
-amplify configure                  # link your AWS account
-amplify push --yes
-```
+**Cognito details (eu-west-2):**
+| Setting | Value |
+|---------|-------|
+| User Pool ID | `eu-west-2_DLWfbFCHS` |
+| App Client ID | `3pfdfs2jjp33jvesvc353pc4ge` |
+| Hosted UI domain | `https://eu-west-2dlwfbfchs.auth.eu-west-2.amazoncognito.com` |
+| Region | `eu-west-2` |
 
-After the push, note from the Amplify console or `amplify status`:
-- Cognito **User Pool ID**
-- Cognito **App Client ID**
-- **S3 bucket name**
+**Add allowed callback URLs for each environment** (AWS Console → Cognito → `eu-west-2_DLWfbFCHS` → App clients → Edit hosted UI):
+- `https://your-railway-web-domain.up.railway.app` — Railway production
+- `http://localhost:5173` — local development
 
-**Add the custom role attribute** (not included in the Amplify config):
+**Add the custom role attribute** if not already present:
 1. AWS Console → Cognito → your User Pool → **Attributes**
 2. Add custom attribute: name `role`, type String, mutable ✓
 
 ---
 
-## Phase 2 — AWS: SES Email
+## Phase 2 — AWS: S3 + SES
 
+### S3
+Create a bucket for file uploads and note the bucket name.
+
+### SES Email
 1. AWS Console → SES → **Verified identities** → Create identity → Domain
-2. Add the DNS records it provides to your domain
-3. **Request production access** — sandbox mode can only send to verified addresses; approval takes up to 24 hours
+2. Add the DNS records to your domain
+3. **Request production access** — sandbox mode can only send to verified addresses
 
 ---
 
-## Phase 3 — Railway: Database + Backend
+## Phase 3 — Railway: Full Stack Setup
 
-### 3a. Create a Railway project
-
-1. Go to [railway.app](https://railway.app) → New Project
-2. **Add PostgreSQL** — click Add Service → Database → PostgreSQL
-3. Once provisioned, open the PostgreSQL service → **Variables** tab → copy `DATABASE_URL`
-
-### 3b. Deploy the backend
-
-1. In the same Railway project → Add Service → **GitHub Repo**
-2. Select your repository
-3. In the service settings → **Root Directory** → set to `backend`
-4. Railway will detect Node.js and run `npm ci && npm run build` automatically
-5. The `railway.toml` in `backend/` handles the start command (`prisma migrate deploy && node dist/index.js`)
-
-### 3c. Set environment variables
-
-In the Railway backend service → **Variables** tab, add:
-
-| Variable | Value |
-|----------|-------|
-| `DATABASE_URL` | Paste from the Railway PostgreSQL service |
-| `COGNITO_USER_POOL_ID` | From Phase 1 |
-| `COGNITO_CLIENT_ID` | From Phase 1 |
-| `AWS_REGION` | `eu-west-1` (or your region) |
-| `AWS_ACCESS_KEY_ID` | IAM user key with S3 + SES access |
-| `AWS_SECRET_ACCESS_KEY` | IAM user secret |
-| `S3_BUCKET_NAME` | From Phase 1 |
-| `SES_FROM_ADDRESS` | `noreply@yourdomain.com` |
-| `XERO_CLIENT_ID` | Your Xero app credentials |
-| `XERO_CLIENT_SECRET` | Your Xero app credentials |
-| `PORT` | `3001` |
-
-After the first deploy succeeds, note the Railway backend URL — you'll need it in Phase 4.
-
-### 3d. Seed the database (once)
-
-After the first successful deploy, seed sample data using the Railway CLI:
+### 3a. Install CLI and create project
 
 ```bash
 npm install -g @railway/cli
 railway login
-railway link        # link to your project
-railway run --service <backend-service-name> npm run db:seed
+railway init    # create a new project, name it "fire-curtains"
 ```
 
-Or temporarily connect from your local machine:
+### 3b. Add PostgreSQL
 
 ```bash
-cd backend
-DATABASE_URL="<railway-postgres-url>" npm run db:seed
+railway add --database postgresql
+# Railway provisions the DB and sets DATABASE_URL automatically
+```
+
+### 3c. Deploy the backend
+
+```bash
+# Deploy backend from the backend/ subdirectory
+railway up ./backend --path-as-root --service api
+
+# Set environment variables (DATABASE_URL is injected automatically — do not set it manually)
+railway variable set COGNITO_USER_POOL_ID=eu-west-2_DLWfbFCHS --service api
+railway variable set COGNITO_CLIENT_ID=3pfdfs2jjp33jvesvc353pc4ge --service api
+railway variable set AWS_REGION=eu-west-2 --service api
+railway variable set AWS_ACCESS_KEY_ID=your-key --service api
+railway variable set AWS_SECRET_ACCESS_KEY=your-secret --service api
+railway variable set S3_BUCKET_NAME=your-bucket --service api
+railway variable set SES_FROM_ADDRESS=noreply@yourdomain.com --service api
+railway variable set XERO_CLIENT_ID=your-xero-id --service api
+railway variable set XERO_CLIENT_SECRET=your-xero-secret --service api
+```
+
+Get the backend's public URL:
+```bash
+railway domain --service api
+# Copy the generated https:// URL — you need it for the frontend VITE_API_URL
+```
+
+### 3d. Deploy the frontend
+
+VITE_* variables are baked into the bundle at build time — set them **before** deploying.
+
+```bash
+# Set build-time env vars first
+railway variable set VITE_API_URL=https://your-api-domain.up.railway.app --service web --skip-deploys
+railway variable set VITE_AWS_COGNITO_REGION=eu-west-2 --service web --skip-deploys
+railway variable set VITE_AWS_USER_POOLS_ID=eu-west-2_DLWfbFCHS --service web --skip-deploys
+railway variable set VITE_AWS_USER_POOLS_WEB_CLIENT_ID=3pfdfs2jjp33jvesvc353pc4ge --service web --skip-deploys
+railway variable set VITE_COGNITO_DOMAIN=https://eu-west-2dlwfbfchs.auth.eu-west-2.amazoncognito.com --service web --skip-deploys
+
+# Deploy (vars are now baked in)
+railway up . --service web
+```
+
+After the first deploy, get the Railway web URL and add it to Cognito's allowed callback URLs (see Phase 1).
+
+### 3e. Seed the database
+
+`railway run` injects Railway's environment variables into a local shell process:
+
+```bash
+railway run --service api npm run db:seed
 ```
 
 ---
 
-## Phase 4 — Vercel: Frontend
+## Checking status and logs
 
-1. Go to [vercel.com](https://vercel.com) → Add New Project → Import your GitHub repo
-2. **Framework preset**: Vite (auto-detected)
-3. **Root directory**: leave as `.` (project root)
-4. **Build command**: `npm run build`
-5. **Output directory**: `build`
-6. The `vercel.json` at the project root handles SPA routing automatically
+```bash
+# Overall project status
+railway status
 
-### Environment variables
+# Stream live logs
+railway logs --service api
+railway logs --service web
 
-In Vercel → your project → **Settings** → Environment Variables:
+# Build logs only
+railway logs --service api --build
 
-| Variable | Value |
-|----------|-------|
-| `VITE_API_URL` | Your Railway backend URL (e.g. `https://fire-curtains-api.up.railway.app`) |
-| `VITE_COGNITO_USER_POOL_ID` | From Phase 1 |
-| `VITE_COGNITO_CLIENT_ID` | From Phase 1 |
-| `VITE_COGNITO_REGION` | `eu-west-1` |
-
-Check `.env.example` for any additional `VITE_*` variables.
-
----
-
-## Deployment Order Summary
-
-1. `amplify push` → Cognito User Pool + S3 bucket created
-2. Request SES production access
-3. Railway → create project → add PostgreSQL → deploy backend from GitHub (`backend/` root) → set env vars
-4. Vercel → import GitHub repo → set `VITE_API_URL` and Cognito vars → deploy
-5. Seed the database once
+# What variables are set
+railway variable list --service api --kv
+railway variable list --service web --kv
+```
 
 ---
 
 ## Re-deploying
 
-**Backend** — push to the `main` branch. Railway auto-rebuilds and restarts. Prisma migrations run automatically on startup.
+```bash
+# Rebuild and redeploy from source
+railway up ./backend --path-as-root --service api
+railway up . --service web
 
-**Frontend** — push to the `main` branch. Vercel auto-rebuilds and deploys.
+# Restart without rebuilding (config-only changes)
+railway restart --service api
+```
 
 ---
 
 ## IAM Permissions for S3 + SES
 
-Create an IAM user in AWS Console → IAM → Users → Create user (programmatic access only). Attach these policies:
+Create an IAM user (programmatic access only) and attach:
+- `AmazonS3FullAccess` (or a policy scoped to your bucket)
+- `AmazonSESFullAccess` (or `ses:SendRawEmail` scoped to your domain)
 
-- `AmazonS3FullAccess` (or a scoped policy limited to your bucket)
-- `AmazonSESFullAccess` (or `ses:SendRawEmail` scoped to your verified domain)
+Use this user's key and secret for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 
-Use this user's access key and secret for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in Railway.
+---
+
+## Deployment order summary
+
+1. Verify Cognito allowed callback URLs include the Railway domain
+2. Request SES production access
+3. `railway init` → create project
+4. `railway add --database postgresql`
+5. Deploy backend → set env vars → get API domain
+6. Set `VITE_*` vars → `railway up . --service web`
+7. `railway run --service api npm run db:seed`
+
+## Environment variable reference
+
+### Backend (`--service api`)
+
+| Variable | Value |
+|----------|-------|
+| `DATABASE_URL` | Auto-injected by Railway |
+| `COGNITO_USER_POOL_ID` | `eu-west-2_DLWfbFCHS` |
+| `COGNITO_CLIENT_ID` | `3pfdfs2jjp33jvesvc353pc4ge` |
+| `AWS_REGION` | `eu-west-2` |
+| `AWS_ACCESS_KEY_ID` | From IAM user |
+| `AWS_SECRET_ACCESS_KEY` | From IAM user |
+| `S3_BUCKET_NAME` | Your S3 bucket name |
+| `SES_FROM_ADDRESS` | Your verified sender address |
+| `XERO_CLIENT_ID` | From Xero developer portal |
+| `XERO_CLIENT_SECRET` | From Xero developer portal |
+
+### Frontend (`--service web`)
+
+| Variable | Value |
+|----------|-------|
+| `VITE_API_URL` | Railway API service URL |
+| `VITE_AWS_COGNITO_REGION` | `eu-west-2` |
+| `VITE_AWS_USER_POOLS_ID` | `eu-west-2_DLWfbFCHS` |
+| `VITE_AWS_USER_POOLS_WEB_CLIENT_ID` | `3pfdfs2jjp33jvesvc353pc4ge` |
+| `VITE_COGNITO_DOMAIN` | `https://eu-west-2dlwfbfchs.auth.eu-west-2.amazoncognito.com` |

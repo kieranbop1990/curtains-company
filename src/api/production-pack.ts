@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import Auth from '@aws-amplify/auth';
+import { userManager } from 'src/lib/user-manager';
 import type { ProductionPack, ProductionSystem, ManufacturingJob, MfgStatus } from 'src/types/production-pack';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -32,7 +32,7 @@ export const productionPackApi = {
   },
   async downloadSystemPdf(packId: string, systemId: string, docType: string, filename: string): Promise<void> {
     let token = '';
-    try { const s = await Auth.currentSession(); token = s.getIdToken().getJwtToken(); } catch {}
+    try { const u = await userManager.getUser(); token = u?.id_token ?? ''; } catch {}
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await fetch(`${API_URL}/api/production-packs/${packId}/systems/${systemId}/pdf/${docType}`, { headers });
     if (!response.ok) throw new Error('PDF download failed');

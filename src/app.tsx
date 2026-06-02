@@ -17,7 +17,7 @@ import { SettingsButton } from 'src/components/settings/settings-button';
 import { SettingsDrawer } from 'src/components/settings/settings-drawer';
 import { Toaster } from 'src/components/toaster';
 import { SettingsConsumer, SettingsProvider } from 'src/contexts/settings-context';
-import { AuthConsumer, AuthProvider } from 'src/contexts/auth/amplify-context';
+import { AuthConsumer, AuthProvider } from 'src/contexts/auth/oidc-context';
 import { gtmConfig } from 'src/config';
 import { useNprogress } from 'src/hooks/use-nprogress';
 import { useAnalytics } from 'src/hooks/use-analytics';

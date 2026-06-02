@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useContext } from 'react';
-import { AuthContext } from 'src/contexts/auth/amplify-context';
+import { AuthContext } from 'src/contexts/auth/oidc-context';
 import NotAuthorisedPage from 'src/pages/not-authorised';
 
 export type AppRole =

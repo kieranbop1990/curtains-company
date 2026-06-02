@@ -17,5 +17,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/dist ./dist
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
-EXPOSE 3001
+ARG PORT=3001
+ENV PORT=$PORT
+EXPOSE $PORT
 ENTRYPOINT ["./entrypoint.sh"]

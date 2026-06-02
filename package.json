@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "start": "serve -s build -l ${PORT:-3000}",
     "preview": "vite preview",
     "lint": "eslint ./src",
     "lint-fix": "eslint --fix ./src"
@@ -23,7 +24,7 @@
     ]
   },
   "dependencies": {
-    "@aws-amplify/auth": "5.3.5",
+    "@aws-amplify/auth": "6.20.0",
     "@cyntler/react-doc-viewer": "^1.13.0",
     "@emotion/cache": "11.11.0",
     "@emotion/react": "11.11.0",
@@ -60,6 +61,7 @@
     "mui-one-time-password-input": "^5.0.0",
     "nprogress": "^0.2.0",
     "numeral": "2.0.6",
+    "oidc-client-ts": "^3.5.0",
     "prop-types": "15.8.1",
     "react": "^19.2.6",
     "react-apexcharts": "1.4.0",
@@ -71,6 +73,7 @@
     "react-hot-toast": "2.4.1",
     "react-i18next": "12.2.2",
     "react-markdown": "8.0.7",
+    "react-oidc-context": "^3.3.1",
     "react-pdf": "7.1.2",
     "react-quill": "2.0.0",
     "react-redux": "8.0.5",
@@ -80,6 +83,7 @@
     "react-syntax-highlighter": "15.5.0",
     "redux": "4.2.1",
     "redux-thunk": "2.4.2",
+    "serve": "^14.2.4",
     "simplebar-react": "3.2.4",
     "stylis": "4.2.0",
     "stylis-plugin-rtl": "2.0.2",
