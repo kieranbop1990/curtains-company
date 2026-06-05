@@ -94,97 +94,113 @@ function QuotePipelineTab() {
           </ThemeIcon>
           <div>
             <Title order={4}>Quote → Live Project Pipeline</Title>
-            <Text size="sm" c="dimmed">The full journey from first enquiry to a confirmed live project</Text>
+            <Text size="sm" c="dimmed">The full journey from first enquiry through to a routed Stage 4 job</Text>
           </div>
         </Group>
       </Paper>
 
-      <SectionHeading>Stages</SectionHeading>
-
+      <SectionHeading>Stage 1 — Quote</SectionHeading>
       <Grid>
         <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
-          <StageCard
-            number={1}
-            title="Create a Quote"
-            description="Log the customer enquiry and scope"
-            icon={<IconFileText size={18} />}
-            roles={['Admin', 'Office / Ops']}
-            bullets={[
-              'Enter customer name and contact details',
-              'Add curtain systems with sizes and spec',
-              'Attach survey drawings if available',
-              'Quote is saved as Draft',
-            ]}
-          />
+          <StageCard number={1} title="Create a Quote" description="Log the customer enquiry and scope"
+            icon={<IconFileText size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Enter customer name and contact details', 'Add curtain systems with sizes and spec', 'Attach survey drawings if available', 'Quote is saved as Draft']} />
         </Grid.Col>
         <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
-          <StageCard
-            number={2}
-            title="Submit for Approval"
-            description="Price and issue to the customer"
-            icon={<IconCurrencyPound size={18} />}
-            roles={['Admin', 'Office / Ops']}
-            bullets={[
-              'Verify pricing and margins',
-              'Mark as Submitted — customer notified',
-              'Chase if no response within target days',
-            ]}
-          />
+          <StageCard number={2} title="Submit for Approval" description="Price and issue to the customer"
+            icon={<IconCurrencyPound size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Verify pricing and margins', 'Mark as Submitted — customer notified', 'Chase if no response within target days']} />
         </Grid.Col>
         <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
-          <StageCard
-            number={3}
-            title="Convert to Live Quote"
-            description="Customer has accepted — move forward"
-            icon={<IconClipboardCheck size={18} />}
-            roles={['Admin', 'Office / Ops']}
-            bullets={[
-              'Upload signed order / PO document',
-              'Set the target installation date',
-              'Quote transitions to Live Quote status',
-            ]}
-          />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
-          <StageCard
-            number={4}
-            title="Route to Live Project"
-            description="Assign a project manager and start production"
-            icon={<IconMap2 size={18} />}
-            roles={['Admin', 'Office / Ops']}
-            bullets={[
-              'Confirm installation address',
-              'Assign project manager',
-              'Live Project record is created automatically',
-            ]}
-          />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
-          <StageCard
-            number={5}
-            title="Live Project Active"
-            description="Project is in progress"
-            icon={<IconStar size={18} />}
-            roles={['Admin', 'Office / Ops']}
-            bullets={[
-              'Track invoices and Xero sync',
-              'Upload and version drawings',
-              'Manage installation components',
-              'Advance to Stage 3 when ready for production',
-            ]}
-          />
+          <StageCard number={3} title="Convert to Live Quote" description="Customer accepted — creates Stage 2 record"
+            icon={<IconClipboardCheck size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Mark quote as Won', 'Live Project (LQ) record created automatically', 'Stage 2 opens in Live Projects']} />
         </Grid.Col>
       </Grid>
 
+      <SectionHeading>Stage 2 — Live Quote (LQ)</SectionHeading>
+      <Text size="sm" c="dimmed">Fill in all project details. The sidebar shows the gate checklist. The "Ready to move to Stage 3" button is locked until all three pass.</Text>
+      <Grid>
+        <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
+          <StageCard number={1} title="Project Details" description="Fill in the core record"
+            icon={<IconFileText size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Customer name (required)', 'Set total contract value (required)', 'Assign a staff member (required)', 'Payment terms, VAT, site address']} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
+          <StageCard number={2} title="Financial Management" description="Invoices and Xero sync"
+            icon={<IconCurrencyPound size={18} />} roles={['Admin', 'Office / Ops', 'Finance']}
+            bullets={['Add invoice records with number, amount, due date', 'Upload invoice PDF against each record', 'Sync with Xero to auto-update PAID/OVERDUE status', 'Track paid to date and outstanding balance']} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
+          <StageCard number={3} title="Key Controls" description="Tick off as each action is completed"
+            icon={<IconClipboardCheck size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Purchase Order received', 'Drawings received', 'Deposit paid', 'Survey booked', 'Contract approved']} />
+        </Grid.Col>
+      </Grid>
       <Paper withBorder p="md" radius="md" bg="yellow.0">
         <Group gap="xs" mb={4}>
           <IconAlertCircle size={16} color="var(--mantine-color-yellow-7)" />
-          <Text size="sm" fw={600}>Gate: before advancing to Stage 3</Text>
+          <Text size="sm" fw={600}>Stage 2 Gate — must all pass to advance</Text>
         </Group>
-        <Text size="sm" c="dimmed">
-          Drawings must be uploaded and approved, and an invoice must exist before the project can advance to Stage 3 (Production). The "Send to Stage 3" button is locked until all gates pass.
-        </Text>
+        <List size="sm" spacing={4} c="dimmed"
+          icon={<ThemeIcon size={14} radius="xl" color="yellow" variant="light"><IconCircleCheck size={10} /></ThemeIcon>}>
+          <List.Item>Customer name entered</List.Item>
+          <List.Item>Contract value set</List.Item>
+          <List.Item>Assignee selected</List.Item>
+        </List>
       </Paper>
+
+      <SectionHeading>Stage 3 — Survey & Drawings (SD)</SectionHeading>
+      <Text size="sm" c="dimmed">Complete the survey, upload and approve drawings, get customer sign-off, and list components. All four gates must pass before routing to Stage 4.</Text>
+      <Grid>
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+          <StageCard number={1} title="Survey Record" description="Log the survey details"
+            icon={<IconCalendar size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Survey date, surveyor name, method', 'Access type noted', 'Tick "Customer signed off survey"']} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+          <StageCard number={2} title="Drawings Package" description="Upload and approve drawings"
+            icon={<IconUpload size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Add drawing with reference number', 'Click the upload icon to attach the PDF/DWG file', 'Change status to APPROVED once reviewed', 'At least one approved drawing with a file is required']} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+          <StageCard number={3} title="Customer Sign-Off" description="Get formal customer approval"
+            icon={<IconShieldCheck size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Set sign-off status to Customer Approved', 'Log approval date and any comments']} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+          <StageCard number={4} title="Components" description="List what needs to be made"
+            icon={<IconPackage size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Add each curtain system as a component', 'Set qty and stock status', 'At least one component required']} />
+        </Grid.Col>
+      </Grid>
+      <Paper withBorder p="md" radius="md" bg="yellow.0">
+        <Group gap="xs" mb={4}>
+          <IconAlertCircle size={16} color="var(--mantine-color-yellow-7)" />
+          <Text size="sm" fw={600}>Stage 3 Gate — must all pass to route to Stage 4</Text>
+        </Group>
+        <List size="sm" spacing={4} c="dimmed"
+          icon={<ThemeIcon size={14} radius="xl" color="yellow" variant="light"><IconCircleCheck size={10} /></ThemeIcon>}>
+          <List.Item>Survey signed off</List.Item>
+          <List.Item>At least one drawing with status APPROVED <strong>and</strong> a file uploaded</List.Item>
+          <List.Item>Review status = Customer Approved</List.Item>
+          <List.Item>At least one component listed</List.Item>
+        </List>
+      </Paper>
+
+      <SectionHeading>Stage 4 — Routing Decision</SectionHeading>
+      <Grid>
+        <Grid.Col span={{ base: 12, sm: 6 }}>
+          <StageCard number={1} title="Stage 4A — Production Pack" description="New curtain systems to be manufactured"
+            icon={<IconBuildingFactory2 size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Click "Send to Stage 4A" once gates pass', 'Production Pack is created automatically', '"Create & Open Production Pack" button appears', 'Navigates directly to the pack to configure systems']} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6 }}>
+          <StageCard number={2} title="Stage 4B — Live Services" description="Service or maintenance job for existing install"
+            icon={<IconTool size={18} />} roles={['Admin', 'Office / Ops']}
+            bullets={['Click "Send to Stage 4B" once gates pass', '"Go to Service Operations" button appears', 'Navigate to Service Operations and create the LS record', 'Link back to this LQ reference']} />
+        </Grid.Col>
+      </Grid>
     </Stack>
   );
 }
@@ -219,12 +235,43 @@ function ProductionTab() {
 
         <Timeline.Item
           bullet={<ThemeIcon size={28} radius="xl" color="orange" variant="light"><IconHammer size={16} /></ThemeIcon>}
-          title={<Text fw={600}>Add Systems to the Pack</Text>}
+          title={<Text fw={600}>Configure Systems — Select Family & Variant</Text>}
         >
           <Text size="sm" c="dimmed" mt={4}>
-            Each curtain system is added as a line item with its spec, dimensions, and components. System-level PDFs (drawings, schedules) can be generated here.
+            Each curtain system is added with its system family (<strong>NECO DC80</strong> or <strong>CSV</strong>), variant (DC80-10/25/40 or Single/Double barrel), and overall dimensions. The cutting list is computed automatically from locked formula constants.
           </Text>
+          <List size="xs" c="dimmed" mt={6} spacing={2}>
+            <List.Item>NECO DC80: barrel Ø89 mm — variants DC80-10, DC80-25, DC80-40</List.Item>
+            <List.Item>CSV: barrel Ø100 mm — single or double/multiple barrel</List.Item>
+          </List>
           <Group gap={4} mt={6}><RoleBadge role="Admin" /><RoleBadge role="Office / Ops" /></Group>
+        </Timeline.Item>
+
+        <Timeline.Item
+          bullet={<ThemeIcon size={28} radius="xl" color="orange" variant="light"><IconPackage size={16} /></ThemeIcon>}
+          title={<Text fw={600}>Generate Production Pack Documents</Text>}
+        >
+          <Text size="sm" c="dimmed" mt={4}>
+            Each system generates a full set of output documents from its own tabs. All are downloadable as PDFs:
+          </Text>
+          <List size="xs" c="dimmed" mt={6} spacing={2}>
+            <List.Item><strong>Spec Sheet</strong> — production specification with barrel diameter, dimensions, accessories summary</List.Item>
+            <List.Item><strong>QC Forms</strong> — 10-item checklist; progress bar tracks completion per system</List.Item>
+            <List.Item><strong>Packing List</strong> — auto-derived from cutting list + accessories + documents</List.Item>
+            <List.Item><strong>Labels & Box Labels</strong> — visual preview; print-ready PDFs with QR code</List.Item>
+            <List.Item><strong>Stock & Purchasing</strong> — aggregated requirements table for warehouse and procurement</List.Item>
+          </List>
+          <Group gap={4} mt={6}><RoleBadge role="Admin" /><RoleBadge role="Office / Ops" /></Group>
+        </Timeline.Item>
+
+        <Timeline.Item
+          bullet={<ThemeIcon size={28} radius="xl" color="orange" variant="light"><IconClipboardCheck size={16} /></ThemeIcon>}
+          title={<Text fw={600}>Formula Config — Admin Only</Text>}
+        >
+          <Text size="sm" c="dimmed" mt={4}>
+            The cutting list formulas (deductions, allowances) are locked. Only an Admin can modify them via the <strong>Formula Config</strong> button in the pack header, which requires an admin passphrase. All changes are audit-logged.
+          </Text>
+          <Group gap={4} mt={6}><RoleBadge role="Admin" /></Group>
         </Timeline.Item>
 
         <Timeline.Item
@@ -371,14 +418,18 @@ function DistributionTab() {
           <ThemeIcon size="lg" color="violet" variant="light" radius="md">
             <IconCamera size={18} />
           </ThemeIcon>
-          <Text fw={600} size="sm">What the field engineer sees (PWA)</Text>
+          <Text fw={600} size="sm">What the field engineer sees (Stage 6D — mobile view)</Text>
         </Group>
         <List size="sm" spacing={6} c="dimmed"
           icon={<ThemeIcon size={16} radius="xl" color="violet" variant="light"><IconCircleCheck size={10} /></ThemeIcon>}>
-          <List.Item>Opens <strong>/field-engineer</strong> on their phone — works offline</List.Item>
-          <List.Item>Sees only the jobs assigned to them for today</List.Item>
-          <List.Item>Submits a day report: hours, notes, progress steps ticked</List.Item>
-          <List.Item>Takes and uploads photos directly from the camera — queued if offline, uploaded when signal returns</List.Item>
+          <List.Item>Opens <strong>/field-engineer</strong> on their phone — works offline, syncs when signal returns</List.Item>
+          <List.Item>Sees only the jobs assigned to them; taps into a job for full day-by-day view</List.Item>
+          <List.Item><strong>Systems tab</strong> — marks each system NOT_STARTED → IN_PROGRESS → INSTALLED with installation notes</List.Item>
+          <List.Item><strong>Media tab</strong> — takes photos/video with camera; tagged by media type (installation evidence, sign-off, etc.); queued offline and uploaded on reconnect</List.Item>
+          <List.Item><strong>RAMS & Drawings tab</strong> — view and download RAMS Pack, Method Statement, Risk Assessment uploaded by the office</List.Item>
+          <List.Item><strong>Report Issue</strong> — flag a site problem with severity (Low/Medium/High/Critical) and optional photo; office is emailed immediately and it's logged to the audit trail</List.Item>
+          <List.Item><strong>Customer signature</strong> — captured on a digital signature canvas (not a text field); stored as PNG with the day submission</List.Item>
+          <List.Item><strong>Submit Day</strong> — finalises the day record; a progress step is added to the office view and live sync badge shows the connection is active</List.Item>
         </List>
       </Paper>
     </Stack>
@@ -505,10 +556,10 @@ function AssetsTab() {
           <Paper withBorder p="md" radius="md">
             <Group gap="sm" mb="xs">
               <ThemeIcon size="md" color="green" variant="light" radius="md"><IconTool size={16} /></ThemeIcon>
-              <Text fw={600} size="sm">Service History</Text>
+              <Text fw={600} size="sm">Service History & Logging</Text>
             </Group>
             <Text size="sm" c="dimmed">
-              Every completed Live Service logs an event against the asset automatically. You can also log ad-hoc service events manually. The full maintenance history is visible on the asset detail page.
+              Every completed Live Service logs an event against the asset automatically. Use <strong>Log Service Event</strong> (in the Service & Maintenance tab or Quick Actions) to manually record ad-hoc visits — enter the engineer, date, summary, and outcome (Pass / Fail / Advisory / Parts Required).
             </Text>
           </Paper>
         </Grid.Col>
@@ -528,10 +579,10 @@ function AssetsTab() {
       <Paper withBorder p="md" radius="md" bg="green.0">
         <Group gap="xs" mb={4}>
           <IconAlertCircle size={16} color="var(--mantine-color-green-7)" />
-          <Text size="sm" fw={600}>Check Alerts</Text>
+          <Text size="sm" fw={600}>Automatic Service Date Calculation</Text>
         </Group>
         <Text size="sm" c="dimmed">
-          The "Check Alerts" button on an asset scans for upcoming renewals and compliance deadlines. Run this periodically or set up a scheduled job to run it automatically across all assets.
+          Set a <strong>Service Frequency (months)</strong> and a <strong>Last Service Date</strong> — the system automatically calculates <strong>Next Service Date</strong> and a <strong>Renewal Alert Date</strong> (30 days before next service). These fields are read-only and update whenever the frequency or last service date changes. The asset status badge (LIVE_ACTIVE / SERVICE_DUE / OVERDUE) and the countdown header are driven by these computed dates.
         </Text>
       </Paper>
     </Stack>

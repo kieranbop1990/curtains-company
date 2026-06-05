@@ -1,5 +1,23 @@
 import { apiClient } from './client';
+import { userManager } from 'src/lib/user-manager';
 import type { DistributionJob, DistributionType } from 'src/types/distribution';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+async function downloadPdfPost(path: string, filename: string): Promise<void> {
+  const user = await userManager.getUser().catch(() => null);
+  const token = user?.id_token ?? '';
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(`PDF request failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
 export const distributionApi = {
   async getAll(params?: { mfgJobId?: string; liveProjectId?: string; liveServiceId?: string }): Promise<DistributionJob[]> {
@@ -27,6 +45,9 @@ export const distributionApi = {
   async updateEngineer(djId: string, engId: string, data: any): Promise<any> {
     return apiClient.patch(`/api/distribution-jobs/${djId}/engineers/${engId}`, data);
   },
+  async deleteEngineer(djId: string, engId: string): Promise<void> {
+    return apiClient.del(`/api/distribution-jobs/${djId}/engineers/${engId}`);
+  },
   async addMilestone(djId: string, data: any): Promise<any> {
     return apiClient.post(`/api/distribution-jobs/${djId}/milestones`, data);
   },
@@ -45,10 +66,10 @@ export const distributionApi = {
   async getDocumentDownloadUrl(djId: string, docType: string): Promise<{ url: string }> {
     return apiClient.get(`/api/distribution-jobs/${djId}/documents/download-url?docType=${encodeURIComponent(docType)}`);
   },
-  getPocUrl(djId: string): string {
-    return `/api/distribution-jobs/${djId}/generate-poc`;
+  async generatePoc(djId: string): Promise<void> {
+    return downloadPdfPost(`/api/distribution-jobs/${djId}/generate-poc`, `POC-${djId}.pdf`);
   },
-  getPodUrl(djId: string): string {
-    return `/api/distribution-jobs/${djId}/generate-pod`;
+  async generatePod(djId: string): Promise<void> {
+    return downloadPdfPost(`/api/distribution-jobs/${djId}/generate-pod`, `POD-${djId}.pdf`);
   },
 };

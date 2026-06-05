@@ -30,6 +30,12 @@ export const productionPackApi = {
   async sendToStage5(packId: string): Promise<ManufacturingJob> {
     return apiClient.post<ManufacturingJob>(`/api/production-packs/${packId}/send-to-stage5`);
   },
+  async updateFormulaConfig(config: Record<string, number>): Promise<void> {
+    return apiClient.post('/api/production-packs/formula-config', config);
+  },
+  async getFormulaConfig(): Promise<Record<string, number>> {
+    return apiClient.get('/api/production-packs/formula-config');
+  },
   async downloadSystemPdf(packId: string, systemId: string, docType: string, filename: string): Promise<void> {
     let token = '';
     try { const u = await userManager.getUser(); token = u?.id_token ?? ''; } catch {}

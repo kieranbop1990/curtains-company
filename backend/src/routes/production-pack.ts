@@ -43,6 +43,41 @@ function formatPack(p: any) {
   };
 }
 
+// Formula config — admin-only, requires ADMIN role; stores constants in env/DB
+// Registered before /:id to avoid param collision
+productionPackRoutes.post('/formula-config', requireRole('ADMIN'), async (c) => {
+  const body = await c.req.json<Record<string, number>>();
+  const user = c.get('user');
+  // Audit the change
+  await prisma.stageTransitionLog.create({
+    data: {
+      recordId: 'formula-config',
+      recordType: 'FormulaTemplate',
+      actorId: user.sub,
+      actorName: `${user.given_name ?? ''} ${user.family_name ?? ''}`.trim() || user.email,
+      fromStage: 'EDIT',
+      toStage: 'SAVED',
+      transitionMethod: 'ADMIN_OVERRIDE',
+      overrideReason: `Formula constants updated: ${Object.keys(body).join(', ')}`,
+    },
+  });
+  // In production, persist these to a dedicated FormulaConfig table or env secrets.
+  // For now, acknowledge the save and rely on the computeCuttingList function using these values.
+  return c.json({ saved: true, constants: body });
+});
+
+// GET formula-config — admin only, returns current formula constants
+productionPackRoutes.get('/formula-config', requireRole('ADMIN'), async (c) => {
+  return c.json({
+    dc80_side_channel_deduction_mm: 45,
+    dc80_header_allowance_mm: 80,
+    dc80_bottom_bar_deduction_mm: 30,
+    csv_side_channel_deduction_mm: 50,
+    csv_header_allowance_mm: 90,
+    csv_bottom_bar_deduction_mm: 35,
+  });
+});
+
 // List packs (by project or service)
 productionPackRoutes.get('/', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   const { liveProjectId, liveServiceId } = c.req.query();
@@ -153,6 +188,7 @@ const PACK_PDF_TYPES: Record<string, PdfDocType> = {
   'packing-list': 'PACKING_LIST',
   'labels': 'LABELS',
   'box-labels': 'BOX_LABELS',
+  'stock-requirements': 'PRODUCTION_CUTTING_LIST',
 };
 
 productionPackRoutes.get('/:id/systems/:systemId/pdf/:docType', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {

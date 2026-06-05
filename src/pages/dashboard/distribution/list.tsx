@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react';
 import {
-  Container, Title, Stack, Group, Paper, Table, Badge, Text, Center, Loader, Alert, Button,
+  Container, Title, Stack, Group, Paper, Table, Badge, Text, Center, Loader, Alert, Button, SegmentedControl,
 } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { distributionApi } from 'src/api/distribution';
-import type { DistributionJob } from 'src/types/distribution';
+import type { DistributionJob, DistributionType } from 'src/types/distribution';
 
-const DIST_LABELS = { COLLECTION: '6A — Collection', DELIVERY: '6B — Delivery', INSTALLATION: '6C — Installation' };
-const DIST_COLORS = { COLLECTION: 'violet', DELIVERY: 'blue', INSTALLATION: 'green' };
+const DIST_LABELS: Record<DistributionType, string> = { COLLECTION: '6A — Collection', DELIVERY: '6B — Delivery', INSTALLATION: '6C — Installation (Live)' };
+const DIST_COLORS: Record<DistributionType, string> = { COLLECTION: 'violet', DELIVERY: 'blue', INSTALLATION: 'green' };
 
 export default function DistributionListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [jobs, setJobs] = useState<DistributionJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const typeFilter = searchParams.get('type') as DistributionType | null;
 
   useEffect(() => {
     distributionApi.getAll()
@@ -22,6 +25,8 @@ export default function DistributionListPage() {
       .catch(() => setError('Failed to load distribution jobs'))
       .finally(() => setLoading(false));
   }, []);
+
+  const filtered = typeFilter ? jobs.filter(j => j.distributionType === typeFilter) : jobs;
 
   if (loading) return <Center p="xl"><Loader /></Center>;
   if (error) return (
@@ -33,10 +38,25 @@ export default function DistributionListPage() {
   return (
     <Container size="xl" py="xl">
       <Stack gap="lg">
-        <Title order={2} fw={700}>Distribution &amp; Installation</Title>
+        <Group justify="space-between">
+          <Title order={2} fw={700}>
+            {typeFilter ? DIST_LABELS[typeFilter] : 'Distribution & Installation'}
+          </Title>
+          <SegmentedControl
+            size="xs"
+            value={typeFilter ?? 'ALL'}
+            onChange={v => v === 'ALL' ? setSearchParams({}) : setSearchParams({ type: v })}
+            data={[
+              { value: 'ALL', label: 'All' },
+              { value: 'COLLECTION', label: '6A Collection' },
+              { value: 'DELIVERY', label: '6B Delivery' },
+              { value: 'INSTALLATION', label: '6C Live' },
+            ]}
+          />
+        </Group>
         <Paper withBorder radius="md">
-          {jobs.length === 0 ? (
-            <Center p="xl"><Text c="dimmed" size="sm">No distribution jobs yet.</Text></Center>
+          {filtered.length === 0 ? (
+            <Center p="xl"><Text c="dimmed" size="sm">No {typeFilter ? DIST_LABELS[typeFilter] : 'distribution'} jobs yet.</Text></Center>
           ) : (
             <Table striped highlightOnHover withTableBorder withColumnBorders>
               <Table.Thead>
@@ -50,7 +70,7 @@ export default function DistributionListPage() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {jobs.map(dj => (
+                {filtered.map(dj => (
                   <Table.Tr key={dj.id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/dashboard/distribution/${dj.id}`)}>
                     <Table.Td><Text size="sm" fw={600}>{dj.djRef}</Text></Table.Td>

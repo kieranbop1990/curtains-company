@@ -8,11 +8,17 @@ export const fieldEngineerApi = {
   async getMyJob(djId: string): Promise<DistributionJob> {
     return apiClient.get<DistributionJob>(`/api/field-engineer/my-jobs/${djId}`);
   },
-  async submitDay(djId: string, data: { dayLabel: string; customerSignature?: string; submittedAt?: string; isFinalDay?: boolean }): Promise<DistributionJob> {
+  async submitDay(djId: string, data: { dayLabel: string; customerSignature?: string; signatureDataUrl?: string; submittedAt?: string; isFinalDay?: boolean }): Promise<DistributionJob> {
     return apiClient.post<DistributionJob>(`/api/field-engineer/my-jobs/${djId}/submit-day`, data);
   },
   async getMediaUploadUrl(djId: string, fileName: string, contentType: string): Promise<{ url: string; fileName: string }> {
     return apiClient.post(`/api/field-engineer/my-jobs/${djId}/media-upload-url`, { fileName, contentType });
+  },
+  async getRams(djId: string): Promise<{ url: string; name: string }[]> {
+    return apiClient.get(`/api/field-engineer/my-jobs/${djId}/rams`);
+  },
+  async reportIssue(djId: string, data: { description: string; severity: string; hasPhoto: boolean }): Promise<void> {
+    return apiClient.post(`/api/field-engineer/my-jobs/${djId}/issues`, data);
   },
 };
 

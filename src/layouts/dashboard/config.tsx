@@ -1,22 +1,37 @@
-import type { ReactNode } from 'react';
 import { useMemo } from 'react';
-import SvgIcon from '@mui/material/SvgIcon';
-
-import CalendarIcon from 'src/icons/untitled-ui/duocolor/calendar';
-import File01Icon from 'src/icons/untitled-ui/duocolor/file-01';
-import HomeSmileIcon from 'src/icons/untitled-ui/duocolor/home-smile';
-import ShoppingBag03Icon from 'src/icons/untitled-ui/duocolor/shopping-bag-03';
-import Upload04Icon from 'src/icons/untitled-ui/duocolor/upload-04';
-import Users03Icon from 'src/icons/untitled-ui/duocolor/users-03';
-import { IconHelp } from '@tabler/icons-react';
+import {
+  IconLayoutDashboard,
+  IconFileDescription,
+  IconClipboardList,
+  IconClipboardCheck,
+  IconTool,
+  IconBuildingFactory2,
+  IconTruck,
+  IconPackage,
+  IconCalendar,
+  IconUsers,
+  IconPuzzle,
+  IconHelp,
+  IconBell,
+  IconChecklist,
+  IconCircleCheck,
+  IconMessage,
+  IconSettings,
+  IconChartBar,
+  IconFolderOpen,
+  IconCurrencyPound,
+  IconCrane,
+  IconBoxSeam,
+  IconArrowsTransferDown,
+} from '@tabler/icons-react';
 import { paths } from 'src/paths';
 
 export interface Item {
   disabled?: boolean;
   external?: boolean;
-  icon?: ReactNode;
+  icon?: React.ReactNode;
   items?: Item[];
-  label?: ReactNode;
+  label?: React.ReactNode;
   path?: string;
   title: string;
 }
@@ -27,60 +42,138 @@ export interface Section {
 }
 
 export const useSections = () => {
-  return useMemo(() => [
+  return useMemo<Section[]>(() => [
     {
       items: [
         {
-          title: 'Operations Dashboard',
+          title: 'Dashboard',
           path: paths.dashboard.operations.index,
-          icon: <SvgIcon fontSize="small"><HomeSmileIcon /></SvgIcon>
-        }
-      ]
+          icon: <IconLayoutDashboard size={20} />,
+        },
+      ],
     },
     {
-      subheader: 'CRM',
+      subheader: 'LG — Installations',
       items: [
         {
-          title: 'Quote Pipeline',
+          title: 'Quotes (S)',
           path: paths.dashboard.quotes.index,
-          icon: <SvgIcon fontSize="small"><File01Icon /></SvgIcon>
+          icon: <IconFileDescription size={20} />,
         },
         {
-          title: 'Live Projects',
+          title: 'Live Quotes (LQ)',
           path: paths.dashboard.liveProjects.index,
-          icon: <SvgIcon fontSize="small"><Upload04Icon /></SvgIcon>
+          icon: <IconClipboardList size={20} />,
         },
         {
-          title: 'Service Operations',
-          path: paths.dashboard.serviceOperations.index,
-          icon: <SvgIcon fontSize="small"><CalendarIcon /></SvgIcon>
+          title: 'Manufacturing (MFG)',
+          path: paths.dashboard.manufacturing.index,
+          icon: <IconBuildingFactory2 size={20} />,
         },
         {
-          title: 'Asset Management',
-          path: paths.dashboard.assets.index,
-          icon: <SvgIcon fontSize="small"><ShoppingBag03Icon /></SvgIcon>
+          title: 'Collection (6A)',
+          path: `${paths.dashboard.distribution.index}?type=COLLECTION`,
+          icon: <IconBoxSeam size={20} />,
         },
-      ]
+        {
+          title: 'Delivery (6B)',
+          path: `${paths.dashboard.distribution.index}?type=DELIVERY`,
+          icon: <IconTruck size={20} />,
+        },
+        {
+          title: 'Live (6C)',
+          path: `${paths.dashboard.distribution.index}?type=INSTALLATION`,
+          icon: <IconArrowsTransferDown size={20} />,
+        },
+      ],
     },
     {
-      subheader: 'Production',
+      subheader: 'LS — Services',
       items: [
         {
-          title: 'Manufacturing',
-          path: paths.dashboard.manufacturing.index,
-          icon: <SvgIcon fontSize="small"><ShoppingBag03Icon /></SvgIcon>
+          title: 'Services (LS)',
+          path: paths.dashboard.serviceOperations.index,
+          icon: <IconClipboardCheck size={20} />,
         },
         {
-          title: 'Distribution',
-          path: paths.dashboard.distribution.index,
-          icon: <SvgIcon fontSize="small"><Upload04Icon /></SvgIcon>
+          title: 'Assets (AST)',
+          path: paths.dashboard.assets.index,
+          icon: <IconPackage size={20} />,
+        },
+      ],
+    },
+    {
+      subheader: 'Operations',
+      items: [
+        {
+          title: 'Operations (Live)',
+          path: paths.dashboard.operations.index,
+          icon: <IconChartBar size={20} />,
         },
         {
-          title: 'Installation Calendar',
+          title: 'Calendar',
           path: paths.dashboard.operations.calendar,
-          icon: <SvgIcon fontSize="small"><CalendarIcon /></SvgIcon>
+          icon: <IconCalendar size={20} />,
         },
-      ]
+        {
+          title: 'Access Equipment',
+          path: paths.dashboard.operations.index,
+          icon: <IconCrane size={20} />,
+          disabled: true,
+        },
+      ],
+    },
+    {
+      subheader: 'Finance & Docs',
+      items: [
+        {
+          title: 'Finance',
+          path: paths.dashboard.operations.index,
+          icon: <IconCurrencyPound size={20} />,
+          disabled: true,
+        },
+        {
+          title: 'Documents',
+          path: paths.dashboard.operations.index,
+          icon: <IconFolderOpen size={20} />,
+          disabled: true,
+        },
+        {
+          title: 'Reports',
+          path: paths.dashboard.operations.index,
+          icon: <IconChartBar size={20} />,
+          disabled: true,
+        },
+      ],
+    },
+    {
+      subheader: 'Workspace',
+      items: [
+        {
+          title: 'Alerts',
+          path: paths.dashboard.operations.index,
+          icon: <IconBell size={20} />,
+          disabled: true,
+        },
+        {
+          title: 'Tasks',
+          path: paths.dashboard.operations.index,
+          icon: <IconChecklist size={20} />,
+          disabled: true,
+        },
+        {
+          title: 'Approvals',
+          path: paths.dashboard.operations.index,
+          icon: <IconCircleCheck size={20} />,
+          disabled: true,
+        },
+        {
+          title: 'Messages',
+          path: paths.dashboard.operations.index,
+          icon: <IconMessage size={20} />,
+          disabled: true,
+        },
+      ],
     },
     {
       subheader: 'Admin',
@@ -88,23 +181,29 @@ export const useSections = () => {
         {
           title: 'Staff Directory',
           path: paths.dashboard.admin.staff,
-          icon: <SvgIcon fontSize="small"><Users03Icon /></SvgIcon>
+          icon: <IconUsers size={20} />,
         },
         {
           title: 'Parts Library',
           path: paths.dashboard.admin.parts,
-          icon: <SvgIcon fontSize="small"><ShoppingBag03Icon /></SvgIcon>
+          icon: <IconPuzzle size={20} />,
         },
-      ]
+        {
+          title: 'Settings',
+          path: paths.dashboard.operations.index,
+          icon: <IconSettings size={20} />,
+          disabled: true,
+        },
+      ],
     },
     {
       items: [
         {
           title: 'How It Works',
           path: paths.howTo,
-          icon: <IconHelp size={20} />
+          icon: <IconHelp size={20} />,
         },
-      ]
+      ],
     },
   ], []);
 };

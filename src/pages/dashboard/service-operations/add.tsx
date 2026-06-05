@@ -11,10 +11,11 @@ export default function ServiceQuoteAddPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Pre-populate from asset if navigated from asset profile (T-087)
+  // Pre-populate from asset or live project if navigated from those pages
   const [customerName, setCustomerName] = useState(searchParams.get('customerName') ?? '');
   const [assetId, setAssetId] = useState(searchParams.get('assetId') ?? undefined);
   const [assetRef, setAssetRef] = useState(searchParams.get('assetRef') ?? '');
+  const lqRef = searchParams.get('lqRef') ?? null;
   const [serviceCategory, setServiceCategory] = useState('');
   const [contractType, setContractType] = useState('');
   const [saving, setSaving] = useState(false);
@@ -48,6 +49,12 @@ export default function ServiceQuoteAddPage() {
             onClick={() => navigate('/dashboard/service-operations')}>Back</Button>
           <Title order={2} fw={700}>New Service Quote</Title>
         </Group>
+
+        {lqRef && (
+          <Paper withBorder radius="md" p="sm" bg="violet.0">
+            <Text size="sm">Creating service job from Live Project <strong>{lqRef}</strong>. Customer name is pre-filled.</Text>
+          </Paper>
+        )}
 
         <Paper withBorder radius="md" p="lg">
           <Stack gap="md">

@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container, Title, Stack, Group, Button, Paper, Text, Badge,
   Grid, TextInput, NumberInput, Checkbox, Select, Alert,
   Table, ActionIcon, Modal, Textarea, Loader, Center,
   Anchor, Breadcrumbs, SimpleGrid, Divider, Stepper, RingProgress,
-  ThemeIcon,
+  ThemeIcon, Tooltip,
 } from '@mantine/core';
 import {
   IconAlertCircle, IconChevronRight, IconPlus, IconTrash,
-  IconArrowRight, IconCheck, IconExternalLink,
+  IconArrowRight, IconCheck, IconExternalLink, IconUpload, IconDownload,
+  IconPackage, IconTool,
 } from '@tabler/icons-react';
 import { liveProjectsApi } from 'src/api/live-projects';
+import { staffApi } from 'src/api/staff';
 import type {
   LiveProject, DrawingStatus, ReviewStatus, LQInvoice, LQDrawing, LQComponent, LQInstallationItem,
 } from 'src/types/live-project';
@@ -62,10 +64,10 @@ function computeGates(lp: LiveProject) {
 }
 
 function computeStage3Gates(lp: LiveProject) {
-  const hasApprovedDrawing = lp.drawings.some(d => d.status === 'APPROVED');
+  const hasApprovedDrawingWithFile = lp.drawings.some(d => d.status === 'APPROVED' && d.s3Key);
   const gates = [
     { label: 'Survey completed', passed: lp.surveySignedOff },
-    { label: 'Drawings approved', passed: hasApprovedDrawing },
+    { label: 'Drawing approved with file uploaded', passed: hasApprovedDrawingWithFile },
     { label: 'Customer sign-off', passed: lp.reviewStatus === 'CUSTOMER_APPROVED' },
     { label: 'Components listed (≥1)', passed: lp.components.length >= 1 },
   ];
@@ -84,12 +86,24 @@ export default function LiveProjectDetailPage() {
   const [addInstOpen, setAddInstOpen] = useState(false);
   const [addCompOpen, setAddCompOpen] = useState(false);
   const [xeroSyncing, setXeroSyncing] = useState(false);
+  const [officeStaff, setOfficeStaff] = useState<{ value: string; label: string }[]>([]);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{ type: 'drawing' | 'invoice'; id: string } | null>(null);
+  const [routingCreating, setRoutingCreating] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!projectId) return;
     liveProjectsApi.get(projectId).then(p => { setLp(p); setLoading(false); })
       .catch(() => setLoading(false));
   }, [projectId]);
+
+  useEffect(() => {
+    staffApi.getAll().then(all => {
+      const filtered = all.filter(s => s.active && (s.role === 'OFFICE_OPERATIONS' || s.role === 'ADMIN'));
+      setOfficeStaff(filtered.map(s => ({ value: s.name, label: s.name })));
+    });
+  }, []);
 
   const reload = async () => {
     if (!projectId) return;
@@ -134,6 +148,47 @@ export default function LiveProjectDetailPage() {
     finally { setXeroSyncing(false); }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!lp || !pendingUpload || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    setUploadingId(pendingUpload.id);
+    try {
+      if (pendingUpload.type === 'drawing') {
+        const { url } = await liveProjectsApi.getDrawingUploadUrl(lp.id, pendingUpload.id, file.type, file.name);
+        await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      } else {
+        const { url } = await liveProjectsApi.getInvoiceUploadUrl(lp.id, pendingUpload.id, file.type, file.name);
+        await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      }
+      await reload();
+    } catch { /* upload failed */ }
+    finally {
+      setUploadingId(null);
+      setPendingUpload(null);
+      e.target.value = '';
+    }
+  };
+
+  const triggerUpload = (type: 'drawing' | 'invoice', id: string) => {
+    setPendingUpload({ type, id });
+    fileInputRef.current?.click();
+  };
+
+  const handleRoutingNav = async (decision: 'PRODUCTION_PACK' | 'LIVE_SERVICES') => {
+    if (!lp) return;
+    setRoutingCreating(true);
+    try {
+      if (decision === 'PRODUCTION_PACK') {
+        const { productionPackApi } = await import('src/api/production-pack');
+        const pack = await productionPackApi.create({ liveProjectId: lp.id });
+        navigate(`/dashboard/production-packs/${pack.id}`);
+      } else {
+        navigate(`/dashboard/service-operations/add?customerName=${encodeURIComponent(lp.customerName)}&lqRef=${encodeURIComponent(lp.lqRef)}`);
+      }
+    } catch { /* navigation fallback */ }
+    finally { setRoutingCreating(false); }
+  };
+
   if (loading) return <Center p="xl"><Loader /></Center>;
   if (!lp) return <Center p="xl"><Text c="dimmed">Project not found.</Text></Center>;
 
@@ -143,7 +198,7 @@ export default function LiveProjectDetailPage() {
   const stage3Gates = computeStage3Gates(lp);
   const stage2Blocked = stage2Gates.some(g => !g.passed);
   const stage3Blocked = stage3Gates.some(g => !g.passed);
-  const stageIndex = lp.stage === 'LQ' ? 0 : 1;
+  const stageIndex = lp.stage === 'LQ' ? 1 : 2;
 
   // Donut chart data for components
   const componentGroups = ['IN_STOCK', 'OUT_OF_STOCK', 'ON_ORDER'].map(status => ({
@@ -153,6 +208,7 @@ export default function LiveProjectDetailPage() {
 
   return (
     <Container size="xl" py="xl">
+      <input ref={fileInputRef} type="file" accept=".pdf,.dwg,.dxf,.png,.jpg" style={{ display: 'none' }} onChange={handleFileUpload} />
       <Stack gap="lg">
         <Breadcrumbs separator={<IconChevronRight size={14} />}>
           <Anchor onClick={() => navigate('/dashboard/live-projects')} size="sm">Live Projects</Anchor>
@@ -292,6 +348,7 @@ export default function LiveProjectDetailPage() {
                       <Table.Th>Status</Table.Th>
                       <Table.Th>Amount</Table.Th>
                       <Table.Th>Due Date</Table.Th>
+                      <Table.Th>PDF</Table.Th>
                       <Table.Th></Table.Th>
                     </Table.Tr>
                   </Table.Thead>
@@ -307,6 +364,18 @@ export default function LiveProjectDetailPage() {
                         <Table.Td>{fmtCurrency(inv.amount)}</Table.Td>
                         <Table.Td>{fmtDate(inv.dueDate)}</Table.Td>
                         <Table.Td>
+                          <Tooltip label={inv.s3Key ? `Download: ${inv.fileName}` : 'Upload invoice PDF'}>
+                            <ActionIcon size="xs" variant="subtle"
+                              color={inv.s3Key ? 'blue' : 'gray'}
+                              loading={uploadingId === inv.id}
+                              onClick={() => inv.s3Key
+                                ? liveProjectsApi.downloadInvoice(lp.id, inv.id).catch(() => {})
+                                : triggerUpload('invoice', inv.id)}>
+                              {inv.s3Key ? <IconDownload size={12} /> : <IconUpload size={12} />}
+                            </ActionIcon>
+                          </Tooltip>
+                        </Table.Td>
+                        <Table.Td>
                           <ActionIcon size="xs" color="red" variant="subtle"
                             onClick={async () => { await liveProjectsApi.deleteInvoice(lp.id, inv.id); reload(); }}>
                             <IconTrash size={12} />
@@ -315,7 +384,7 @@ export default function LiveProjectDetailPage() {
                       </Table.Tr>
                     ))}
                     {lp.invoices.length === 0 && (
-                      <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center">No invoices</Text></Table.Td></Table.Tr>
+                      <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed" ta="center">No invoices</Text></Table.Td></Table.Tr>
                     )}
                   </Table.Tbody>
                 </Table>
@@ -368,6 +437,7 @@ export default function LiveProjectDetailPage() {
                           <Table.Th>Drawing No.</Table.Th>
                           <Table.Th>Description</Table.Th>
                           <Table.Th>Status</Table.Th>
+                          <Table.Th>File</Table.Th>
                           <Table.Th></Table.Th>
                         </Table.Tr>
                       </Table.Thead>
@@ -382,6 +452,25 @@ export default function LiveProjectDetailPage() {
                                 onChange={async v => { await liveProjectsApi.updateDrawing(lp.id, d.id, { status: v as DrawingStatus }); reload(); }} />
                             </Table.Td>
                             <Table.Td>
+                              <Group gap={4}>
+                                <Tooltip label={d.s3Key ? `Download: ${d.fileName}` : 'Upload drawing file'}>
+                                  <ActionIcon size="xs" variant="subtle"
+                                    color={d.s3Key ? 'blue' : 'gray'}
+                                    loading={uploadingId === d.id}
+                                    onClick={() => d.s3Key
+                                      ? liveProjectsApi.downloadDrawing(lp.id, d.id).catch(() => {})
+                                      : triggerUpload('drawing', d.id)}>
+                                    {d.s3Key ? <IconDownload size={12} /> : <IconUpload size={12} />}
+                                  </ActionIcon>
+                                </Tooltip>
+                                {d.s3Key && (
+                                  <Text size="xs" c="dimmed" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {d.fileName}
+                                  </Text>
+                                )}
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>
                               <ActionIcon size="xs" color="red" variant="subtle"
                                 onClick={async () => { await liveProjectsApi.deleteDrawing(lp.id, d.id); reload(); }}>
                                 <IconTrash size={12} />
@@ -390,7 +479,7 @@ export default function LiveProjectDetailPage() {
                           </Table.Tr>
                         ))}
                         {lp.drawings.length === 0 && (
-                          <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed" ta="center">No drawings</Text></Table.Td></Table.Tr>
+                          <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center">No drawings</Text></Table.Td></Table.Tr>
                         )}
                       </Table.Tbody>
                     </Table>
@@ -528,8 +617,16 @@ export default function LiveProjectDetailPage() {
                   checked={lp.contractApproved}
                   onChange={e => handleField('contractApproved', e.target.checked)}
                   mb="sm" />
-                <TextInput label="Assignee" defaultValue={lp.assigneeName}
-                  onBlur={e => { if (e.target.value !== lp.assigneeName) handleField('assigneeName', e.target.value); }} />
+                <Select
+                  label="Assignee"
+                  placeholder="Select staff member"
+                  searchable
+                  clearable
+                  data={officeStaff}
+                  value={lp.assigneeName ?? null}
+                  onChange={v => handleField('assigneeName', v ?? '')}
+                  nothingFoundMessage="No office staff found"
+                />
               </Paper>
 
               {/* Stage Gate: Move to Stage 3 */}
@@ -582,12 +679,55 @@ export default function LiveProjectDetailPage() {
                 </Paper>
               )}
 
+              {/* Admin: reset stage backwards */}
+              <Paper withBorder radius="md" p="lg" style={{ borderColor: 'var(--mantine-color-orange-4)' }}>
+                <Text size="xs" fw={600} c="orange" mb="sm" tt="uppercase" style={{ letterSpacing: 1 }}>Admin Override</Text>
+                <Stack gap="xs">
+                  {lp.routingDecision && (
+                    <Button size="xs" variant="outline" color="orange" fullWidth
+                      onClick={async () => {
+                        try { const u = await liveProjectsApi.clearRouting(lp.id); setLp(u); }
+                        catch (e: any) { setError(e.message); }
+                      }}>
+                      Clear Routing Decision
+                    </Button>
+                  )}
+                  {lp.stage === 'SD' && (
+                    <Button size="xs" variant="outline" color="red" fullWidth
+                      onClick={async () => {
+                        try { const u = await liveProjectsApi.resetToLq(lp.id); setLp(u); }
+                        catch (e: any) { setError(e.message); }
+                      }}>
+                      Reset to Stage 2 (LQ)
+                    </Button>
+                  )}
+                  {!lp.routingDecision && lp.stage === 'LQ' && (
+                    <Text size="xs" c="dimmed">No resets available at Stage 2.</Text>
+                  )}
+                </Stack>
+              </Paper>
+
               {lp.routingDecision && (
                 <Paper withBorder radius="md" p="lg">
-                  <Title order={4} fw={600} mb="sm">Routing</Title>
-                  <Badge color={lp.routingDecision === 'PRODUCTION_PACK' ? 'blue' : 'violet'} variant="light" size="lg">
+                  <Title order={4} fw={600} mb="sm">Routed to Stage 4</Title>
+                  <Badge
+                    color={lp.routingDecision === 'PRODUCTION_PACK' ? 'blue' : 'violet'}
+                    variant="light" size="lg" mb="md" display="block">
                     {lp.routingDecision === 'PRODUCTION_PACK' ? 'Stage 4A — Production Pack' : 'Stage 4B — Live Services'}
                   </Badge>
+                  {lp.routingDecision === 'PRODUCTION_PACK' ? (
+                    <Button fullWidth color="blue" leftSection={<IconPackage size={14} />}
+                      loading={routingCreating}
+                      onClick={() => handleRoutingNav('PRODUCTION_PACK')}>
+                      Create &amp; Open Production Pack
+                    </Button>
+                  ) : (
+                    <Button fullWidth color="violet" leftSection={<IconTool size={14} />}
+                      loading={routingCreating}
+                      onClick={() => handleRoutingNav('LIVE_SERVICES')}>
+                      Go to Service Operations
+                    </Button>
+                  )}
                 </Paper>
               )}
             </Stack>

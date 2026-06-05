@@ -8,6 +8,7 @@ import {
 import { IconArrowLeft, IconAlertCircle, IconTool, IconShieldCheck, IconBox, IconFileText, IconCurrencyPound, IconClipboardList, IconTruck } from '@tabler/icons-react';
 import { liveServicesApi } from 'src/api/service-operations';
 import { distributionApi } from 'src/api/distribution';
+import { staffApi } from 'src/api/staff';
 import type { LiveService } from 'src/types/service-operations';
 import type { DistributionType } from 'src/types/distribution';
 
@@ -26,6 +27,8 @@ export default function LiveServiceDetailPage() {
   const [distModalOpen, setDistModalOpen] = useState(false);
   const [distType, setDistType] = useState<DistributionType>('COLLECTION');
   const [sendingToDist, setSendingToDist] = useState(false);
+  const [fieldEngineers, setFieldEngineers] = useState<{ value: string; label: string }[]>([]);
+  const [officeStaff, setOfficeStaff] = useState<{ value: string; label: string }[]>([]);
 
   const load = useCallback(() => {
     if (!lsId) return;
@@ -37,6 +40,14 @@ export default function LiveServiceDetailPage() {
   }, [lsId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    staffApi.getAll().then(all => {
+      const active = all.filter(s => s.active);
+      setFieldEngineers(active.filter(s => s.role === 'ENGINEER_FIELD' || s.role === 'ADMIN').map(s => ({ value: s.name, label: s.name })));
+      setOfficeStaff(active.filter(s => s.role === 'OFFICE_OPERATIONS' || s.role === 'ADMIN').map(s => ({ value: s.name, label: s.name })));
+    });
+  }, []);
 
   const save = async (patch: Partial<LiveService>) => {
     if (!lsId || !ls) return;
@@ -128,8 +139,16 @@ export default function LiveServiceDetailPage() {
                       onChange={(e) => save({ firmTime: e.currentTarget.checked })} />
                   </Grid.Col>
                   <Grid.Col span={6}>
-                    <TextInput label="Assigned Engineer" value={ls.engineerName ?? ''}
-                      onChange={(e) => save({ engineerName: e.currentTarget.value })} />
+                    <Select
+                      label="Assigned Engineer"
+                      placeholder="Select engineer"
+                      searchable
+                      clearable
+                      data={fieldEngineers}
+                      value={ls.engineerName ?? null}
+                      onChange={v => save({ engineerName: v ?? undefined })}
+                      nothingFoundMessage="No field engineers found"
+                    />
                   </Grid.Col>
                   <Grid.Col span={6}>
                     <TextInput label="Team / Resource" value={ls.team ?? ''}
@@ -296,8 +315,16 @@ export default function LiveServiceDetailPage() {
                   <Text fw={600} size="sm">Financial Control</Text>
                   <Grid gap="sm">
                     <Grid.Col span={6}>
-                      <TextInput label="Account Manager" value={ls.accountManager ?? ''}
-                        onChange={(e) => save({ accountManager: e.currentTarget.value })} />
+                      <Select
+                        label="Account Manager"
+                        placeholder="Select account manager"
+                        searchable
+                        clearable
+                        data={officeStaff}
+                        value={ls.accountManager ?? null}
+                        onChange={v => save({ accountManager: v ?? undefined })}
+                        nothingFoundMessage="No office staff found"
+                      />
                     </Grid.Col>
                     <Grid.Col span={6}>
                       <TextInput label="Account Number" value={ls.accountNumber ?? ''}

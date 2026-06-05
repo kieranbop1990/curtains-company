@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { prisma } from '../lib/prisma.js';
 import { requireRole } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
-import { getPresignedUploadUrl, getPresignedDownloadUrl, listFiles } from '../lib/s3.js';
+import { getPresignedUploadUrl, getPresignedDownloadUrl, deleteFile } from '../lib/s3.js';
 import { generateDocument } from '../lib/pdf.js';
 import { sendServiceDueAlert, sendRenewalReminder } from '../lib/email.js';
 import type { AssetStatus, AssetPriority } from '@prisma/client';
@@ -64,6 +64,10 @@ function formatAsset(a: any) {
       id: e.id, serviceDate: e.serviceDate, engineerName: e.engineerName ?? '',
       company: e.company ?? '', summary: e.summary ?? '', statusLabel: e.statusLabel ?? '',
     })),
+    documents: (a.documents ?? []).map((d: any) => ({
+      id: d.id, docType: d.docType, fileName: d.fileName,
+      uploadedBy: d.uploadedBy ?? '', uploadedAt: d.uploadedAt,
+    })),
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
   };
@@ -84,7 +88,7 @@ assetsRoutes.get('/', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   }
   const assets = await prisma.asset.findMany({
     where,
-    include: { contacts: true, serviceEvents: { orderBy: { serviceDate: 'desc' } } },
+    include: { contacts: true, serviceEvents: { orderBy: { serviceDate: 'desc' } }, documents: { orderBy: { uploadedAt: 'desc' } } },
     orderBy: { createdAt: 'desc' },
   });
   return c.json(assets.map(formatAsset));
@@ -93,7 +97,7 @@ assetsRoutes.get('/', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
 assetsRoutes.get('/:id', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   const asset = await prisma.asset.findUnique({
     where: { id: c.req.param('id') },
-    include: { contacts: true, serviceEvents: { orderBy: { serviceDate: 'desc' } } },
+    include: { contacts: true, serviceEvents: { orderBy: { serviceDate: 'desc' } }, documents: { orderBy: { uploadedAt: 'desc' } } },
   });
   if (!asset) return c.json({ error: 'Not found' }, 404);
 
@@ -127,7 +131,7 @@ assetsRoutes.post('/', requireRole(...PERMISSIONS.fullCrm as any), async (c) => 
       siteAddress: body.siteAddress,
       systemType: body.systemType,
     },
-    include: { contacts: true, serviceEvents: true },
+    include: { contacts: true, serviceEvents: true, documents: true },
   });
   return c.json(formatAsset(asset), 201);
 });
@@ -148,7 +152,7 @@ assetsRoutes.patch('/:id', requireRole(...PERMISSIONS.fullCrm as any), async (c)
   const asset = await prisma.asset.update({
     where: { id: c.req.param('id') },
     data,
-    include: { contacts: true, serviceEvents: { orderBy: { serviceDate: 'desc' } } },
+    include: { contacts: true, serviceEvents: { orderBy: { serviceDate: 'desc' } }, documents: { orderBy: { uploadedAt: 'desc' } } },
   });
   return c.json(formatAsset(asset));
 });
@@ -254,27 +258,69 @@ assetsRoutes.get('/:id/pdf', requireRole(...PERMISSIONS.fullCrm as any), async (
   return c.body(buffer as any);
 });
 
-// Document upload/download via S3 presigned URLs
+// Document management — Approach A: DB-backed records + S3 presigned URLs
+
+// List all documents for this asset (from DB, not S3 scan)
 assetsRoutes.get('/:id/documents', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
-  const prefix = `assets/${c.req.param('id')}/documents`;
-  const files = await listFiles(prefix);
-  return c.json(files);
+  const docs = await prisma.assetDocument.findMany({
+    where: { assetId: c.req.param('id') },
+    orderBy: { uploadedAt: 'desc' },
+  });
+  return c.json(docs);
 });
 
+// Generate presigned upload URL + create DB record
 assetsRoutes.post('/:id/documents/upload-url', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
-  const { docType, contentType } = await c.req.json();
-  const fileName = `${docType.replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`;
+  const user = c.get('user');
+  const { docType, contentType, fileName: rawName } = await c.req.json();
+  const safeName = (rawName ?? docType).replace(/[^a-zA-Z0-9-_. ]/g, '_');
+  const uniqueName = `${Date.now()}-${safeName}`;
   const prefix = `assets/${c.req.param('id')}/documents`;
-  const url = await getPresignedUploadUrl(prefix, fileName, contentType || 'application/pdf');
-  return c.json({ url, fileName });
+  const s3Key = `${prefix}/${uniqueName}`;
+  const url = await getPresignedUploadUrl(prefix, uniqueName, contentType || 'application/pdf');
+  const doc = await prisma.assetDocument.create({
+    data: {
+      assetId: c.req.param('id'),
+      docType,
+      fileName: safeName,
+      s3Key,
+      uploadedBy: `${user.given_name ?? ''} ${user.family_name ?? ''}`.trim() || user.email,
+    },
+  });
+  return c.json({ url, fileName: uniqueName, documentId: doc.id });
 });
 
+// Generate presigned download URL by docType (latest) or documentId
 assetsRoutes.get('/:id/documents/download-url', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
-  const { docType } = c.req.query();
-  const fileName = `${(docType as string).replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`;
-  const prefix = `assets/${c.req.param('id')}/documents`;
+  const { docType, documentId } = c.req.query();
+  let doc;
+  if (documentId) {
+    doc = await prisma.assetDocument.findUnique({ where: { id: documentId as string } });
+  } else {
+    doc = await prisma.assetDocument.findFirst({
+      where: { assetId: c.req.param('id'), docType: docType as string },
+      orderBy: { uploadedAt: 'desc' },
+    });
+  }
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+  const parts = doc.s3Key.split('/');
+  const prefix = parts.slice(0, -1).join('/');
+  const fileName = parts[parts.length - 1];
   const url = await getPresignedDownloadUrl(prefix, fileName);
-  return c.json({ url });
+  return c.json({ url, fileName: doc.fileName, docType: doc.docType });
+});
+
+// Delete a document record + remove from S3
+assetsRoutes.delete('/:id/documents/:docId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const doc = await prisma.assetDocument.findUnique({ where: { id: c.req.param('docId') } });
+  if (!doc) return c.json({ error: 'Not found' }, 404);
+  if (doc.assetId !== c.req.param('id')) return c.json({ error: 'Forbidden' }, 403);
+  const parts = doc.s3Key.split('/');
+  const prefix = parts.slice(0, -1).join('/');
+  const fileName = parts[parts.length - 1];
+  await deleteFile(prefix, fileName).catch(() => {});
+  await prisma.assetDocument.delete({ where: { id: doc.id } });
+  return c.json({ ok: true });
 });
 
 // Service events

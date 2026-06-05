@@ -5,6 +5,7 @@ import { PERMISSIONS } from '../lib/permissions.js';
 import { logStageTransition } from '../lib/audit.js';
 import { getXeroAccessToken, getInvoiceStatus } from '../lib/xero.js';
 import { sendEmail } from '../lib/email.js';
+import { getPresignedUploadUrl, getPresignedDownloadUrl } from '../lib/s3.js';
 import type { DrawingStatus, ReviewStatus, LQRoutingDecision } from '@prisma/client';
 
 export const liveProjectsRoutes = new Hono();
@@ -59,10 +60,11 @@ function formatLiveProject(lp: any) {
     invoices: (lp.invoices ?? []).map((i: any) => ({
       id: i.id, invoiceNumber: i.invoiceNumber, status: i.status,
       amount: i.amount, dueDate: i.dueDate ?? null, xeroInvoiceId: i.xeroInvoiceId ?? null,
+      s3Key: i.s3Key ?? null, fileName: i.fileName ?? null,
     })),
     drawings: (lp.drawings ?? []).map((d: any) => ({
       id: d.id, drawingNumber: d.drawingNumber, description: d.description ?? '',
-      status: d.status,
+      status: d.status, s3Key: d.s3Key ?? null, fileName: d.fileName ?? null,
     })),
     installationSchedule: (lp.installationSchedule ?? []).map((item: any) => ({
       id: item.id, systemName: item.systemName,
@@ -164,10 +166,19 @@ liveProjectsRoutes.patch('/:id', requireRole(...PERMISSIONS.fullCrm as any), asy
   return c.json(formatLiveProject(lp));
 });
 
-// Stage transition: LQ → SD
+// Stage transition: LQ → SD (with gate enforcement)
 liveProjectsRoutes.post('/:id/advance-to-stage3', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   const id = c.req.param('id');
   const auth = c.get('user' as any);
+  const existing = await prisma.liveProject.findUnique({ where: { id } });
+  if (!existing) return c.json({ error: 'Not found' }, 404);
+
+  const unmet: string[] = [];
+  if (!existing.customerName) unmet.push('Customer name required');
+  if (existing.totalContractValue == null) unmet.push('Contract value required');
+  if (!existing.assigneeName) unmet.push('Assignee required');
+  if (unmet.length > 0) return c.json({ error: 'Stage 2 gate not met', unmet }, 400);
+
   const lp = await prisma.liveProject.update({ where: { id }, data: { stage: 'SD' }, include: withRelations });
   await logStageTransition({
     recordId: id, recordType: 'LiveProject',
@@ -177,7 +188,37 @@ liveProjectsRoutes.post('/:id/advance-to-stage3', requireRole(...PERMISSIONS.ful
   return c.json(formatLiveProject(lp));
 });
 
-// Routing decision: 4A or 4B
+// Admin reset: clear routing decision (SD → SD with no routing)
+liveProjectsRoutes.post('/:id/clear-routing', requireRole('ADMIN'), async (c) => {
+  const id = c.req.param('id');
+  const auth = c.get('user' as any);
+  const lp = await prisma.liveProject.update({
+    where: { id }, data: { routingDecision: null }, include: withRelations,
+  });
+  await logStageTransition({
+    recordId: id, recordType: 'LiveProject',
+    actorId: auth?.sub ?? 'system', actorName: auth?.name ?? 'system',
+    fromStage: 'ROUTED', toStage: 'SD', method: 'ADMIN_OVERRIDE',
+  });
+  return c.json(formatLiveProject(lp));
+});
+
+// Admin reset: revert SD → LQ
+liveProjectsRoutes.post('/:id/reset-to-lq', requireRole('ADMIN'), async (c) => {
+  const id = c.req.param('id');
+  const auth = c.get('user' as any);
+  const lp = await prisma.liveProject.update({
+    where: { id }, data: { stage: 'LQ', routingDecision: null }, include: withRelations,
+  });
+  await logStageTransition({
+    recordId: id, recordType: 'LiveProject',
+    actorId: auth?.sub ?? 'system', actorName: auth?.name ?? 'system',
+    fromStage: 'SD', toStage: 'LQ', method: 'ADMIN_OVERRIDE',
+  });
+  return c.json(formatLiveProject(lp));
+});
+
+// Routing decision: 4A or 4B (with gate enforcement)
 liveProjectsRoutes.post('/:id/route', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   const id = c.req.param('id');
   const { decision } = await c.req.json() as { decision: LQRoutingDecision };
@@ -185,6 +226,20 @@ liveProjectsRoutes.post('/:id/route', requireRole(...PERMISSIONS.fullCrm as any)
     return c.json({ error: 'Invalid routing decision' }, 400);
   }
   const auth = c.get('user' as any);
+
+  const existing = await prisma.liveProject.findUnique({
+    where: { id }, include: { drawings: true, components: true },
+  });
+  if (!existing) return c.json({ error: 'Not found' }, 404);
+
+  const hasApprovedDrawingWithFile = existing.drawings.some(d => d.status === 'APPROVED' && d.s3Key);
+  const unmet: string[] = [];
+  if (!existing.surveySignedOff) unmet.push('Survey must be signed off');
+  if (!hasApprovedDrawingWithFile) unmet.push('At least one drawing must be approved and have a file uploaded');
+  if (existing.reviewStatus !== 'CUSTOMER_APPROVED') unmet.push('Customer sign-off required');
+  if (existing.components.length < 1) unmet.push('At least one component required');
+  if (unmet.length > 0) return c.json({ error: 'Stage 3 gate not met', unmet }, 400);
+
   const lp = await prisma.liveProject.update({
     where: { id }, data: { routingDecision: decision }, include: withRelations,
   });
@@ -228,6 +283,30 @@ liveProjectsRoutes.patch('/:id/invoices/:invId', requireRole(...PERMISSIONS.full
 liveProjectsRoutes.delete('/:id/invoices/:invId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   await prisma.lQInvoice.delete({ where: { id: c.req.param('invId') } });
   return c.json({ ok: true });
+});
+
+// Invoice file upload (PDF)
+liveProjectsRoutes.post('/:id/invoices/:invId/upload-url', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const { contentType, fileName: rawName } = await c.req.json();
+  const safeName = (rawName ?? 'invoice.pdf').replace(/[^a-zA-Z0-9-_. ]/g, '_');
+  const uniqueName = `${Date.now()}-${safeName}`;
+  const prefix = `live-projects/${c.req.param('id')}/invoices`;
+  const s3Key = `${prefix}/${uniqueName}`;
+  const url = await getPresignedUploadUrl(prefix, uniqueName, contentType || 'application/pdf');
+  await prisma.lQInvoice.update({
+    where: { id: c.req.param('invId') },
+    data: { s3Key, fileName: safeName },
+  });
+  return c.json({ url, fileName: uniqueName });
+});
+
+// Invoice file download
+liveProjectsRoutes.get('/:id/invoices/:invId/download-url', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const inv = await prisma.lQInvoice.findUnique({ where: { id: c.req.param('invId') } });
+  if (!inv?.s3Key) return c.json({ error: 'No file uploaded' }, 404);
+  const parts = inv.s3Key.split('/');
+  const url = await getPresignedDownloadUrl(parts.slice(0, -1).join('/'), parts[parts.length - 1]);
+  return c.json({ url, fileName: inv.fileName });
 });
 
 // Xero sync for invoices
@@ -288,6 +367,30 @@ liveProjectsRoutes.patch('/:id/drawings/:drawingId', requireRole(...PERMISSIONS.
 liveProjectsRoutes.delete('/:id/drawings/:drawingId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   await prisma.lQDrawing.delete({ where: { id: c.req.param('drawingId') } });
   return c.json({ ok: true });
+});
+
+// Drawing file upload
+liveProjectsRoutes.post('/:id/drawings/:drawingId/upload-url', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const { contentType, fileName: rawName } = await c.req.json();
+  const safeName = (rawName ?? 'drawing').replace(/[^a-zA-Z0-9-_. ]/g, '_');
+  const uniqueName = `${Date.now()}-${safeName}`;
+  const prefix = `live-projects/${c.req.param('id')}/drawings`;
+  const s3Key = `${prefix}/${uniqueName}`;
+  const url = await getPresignedUploadUrl(prefix, uniqueName, contentType || 'application/pdf');
+  await prisma.lQDrawing.update({
+    where: { id: c.req.param('drawingId') },
+    data: { s3Key, fileName: safeName },
+  });
+  return c.json({ url, fileName: uniqueName });
+});
+
+// Drawing file download
+liveProjectsRoutes.get('/:id/drawings/:drawingId/download-url', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const drawing = await prisma.lQDrawing.findUnique({ where: { id: c.req.param('drawingId') } });
+  if (!drawing?.s3Key) return c.json({ error: 'No file uploaded' }, 404);
+  const parts = drawing.s3Key.split('/');
+  const url = await getPresignedDownloadUrl(parts.slice(0, -1).join('/'), parts[parts.length - 1]);
+  return c.json({ url, fileName: drawing.fileName });
 });
 
 // Installation schedule

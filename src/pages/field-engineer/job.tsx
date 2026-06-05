@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container, Stack, Title, Text, Paper, Group, Badge, Button,
   Center, Loader, Alert, Tabs, Textarea, Anchor, Progress,
-  NumberInput, Select,
+  NumberInput, Select, Modal, Table,
 } from '@mantine/core';
-import { IconArrowLeft, IconAlertCircle, IconCamera, IconSend, IconCalendar } from '@tabler/icons-react';
+import { IconArrowLeft, IconAlertCircle, IconCamera, IconSend, IconCalendar, IconFileText, IconDownload } from '@tabler/icons-react';
 import { fieldEngineerApi, photoQueue } from 'src/api/field-engineer';
 import type { DistributionJob } from 'src/types/distribution';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const SYSTEM_STATUSES = [
   { value: 'NOT_STARTED', label: 'Not Started' },
@@ -45,6 +47,14 @@ export default function FieldEngineerJobPage() {
   const [queuedCount, setQueuedCount] = useState(0);
   const [uploadedCount, setUploadedCount] = useState(0);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const [sseStatus, setSseStatus] = useState<'connecting' | 'active' | 'unavailable'>('connecting');
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issueDesc, setIssueDesc] = useState('');
+  const [issueSeverity, setIssueSeverity] = useState('MEDIUM');
+  const [issuePhotoFile, setIssuePhotoFile] = useState<File | null>(null);
+  const [issueSubmitting, setIssueSubmitting] = useState(false);
+  const [issueSuccess, setIssueSuccess] = useState(false);
+  const issuePhotoRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     if (!djId) return;
@@ -75,6 +85,20 @@ export default function FieldEngineerJobPage() {
     setQueuedCount(queue.filter(p => p.status === 'queued' || p.status === 'failed').length);
     setUploadedCount(queue.filter(p => p.status === 'done').length);
   }, [djId]);
+
+  useEffect(() => {
+    if (!djId || !navigator.onLine) { setSseStatus('unavailable'); return; }
+    const es = new EventSource(`${API_URL}/api/field-engineer/my-jobs/${djId}/events`);
+    es.onopen = () => setSseStatus('active');
+    es.onerror = () => setSseStatus('unavailable');
+    return () => es.close();
+  }, [djId]);
+
+  useEffect(() => {
+    if (!issueSuccess) return;
+    const t = setTimeout(() => setIssueSuccess(false), 3000);
+    return () => clearTimeout(t);
+  }, [issueSuccess]);
 
   const capturePhoto = async () => {
     cameraRef.current?.click();
@@ -118,6 +142,7 @@ export default function FieldEngineerJobPage() {
       await fieldEngineerApi.submitDay(djId, {
         dayLabel: `Day ${activeDay} of ${job.daysOnSite ?? '?'}`,
         customerSignature: customerSig || undefined,
+        signatureDataUrl: customerSig.startsWith('data:') ? customerSig : undefined,
         submittedAt: new Date().toISOString(),
         isFinalDay: activeDay === totalDays,
       });
@@ -125,6 +150,25 @@ export default function FieldEngineerJobPage() {
       await photoQueue.processQueue();
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const submitIssue = async () => {
+    if (!djId) return;
+    setIssueSubmitting(true);
+    try {
+      await fieldEngineerApi.reportIssue(djId, {
+        description: issueDesc,
+        severity: issueSeverity,
+        hasPhoto: !!issuePhotoFile,
+      });
+      setIssueOpen(false);
+      setIssueDesc('');
+      setIssueSeverity('MEDIUM');
+      setIssuePhotoFile(null);
+      setIssueSuccess(true);
+    } finally {
+      setIssueSubmitting(false);
     }
   };
 
@@ -144,9 +188,11 @@ export default function FieldEngineerJobPage() {
         <Group justify="space-between">
           <Button variant="subtle" size="sm" leftSection={<IconArrowLeft size={14} />}
             onClick={() => navigate('/field-engineer')}>Jobs</Button>
-          <Text size="xs" c="dimmed" ta="right">
-            {navigator.onLine ? '🟢 Online' : '🔴 Offline'}
-          </Text>
+          <Group gap="xs">
+            <Text size="xs" c="dimmed">{navigator.onLine ? '🟢 Online' : '🔴 Offline'}</Text>
+            {sseStatus === 'active' && <Badge size="xs" color="green" variant="dot">Live sync</Badge>}
+            {sseStatus === 'unavailable' && <Badge size="xs" color="gray" variant="dot">Sync offline</Badge>}
+          </Group>
         </Group>
 
         <Paper withBorder radius="md" p="md">
@@ -166,12 +212,18 @@ export default function FieldEngineerJobPage() {
             <Tabs.Tab value="job">Job</Tabs.Tab>
             <Tabs.Tab value="systems">Systems</Tabs.Tab>
             <Tabs.Tab value="media">Media</Tabs.Tab>
+            <Tabs.Tab value="documents" leftSection={<IconFileText size={14} />}>RAMS & Drawings</Tabs.Tab>
             <Tabs.Tab value="calendar">Calendar</Tabs.Tab>
           </Tabs.List>
 
           {/* Per-job view (T-154) */}
           <Tabs.Panel value="job" pt="md">
             <Stack gap="md">
+              {issueSuccess && (
+                <Alert color="green" icon={<IconAlertCircle size={14} />} variant="light">
+                  Issue reported. Office has been notified.
+                </Alert>
+              )}
               {/* Day navigation (T-153) */}
               <Paper withBorder radius="md" p="md">
                 <Group justify="space-between">
@@ -200,6 +252,12 @@ export default function FieldEngineerJobPage() {
                 </Stack>
               </Paper>
 
+              {/* Report Issue */}
+              <Button variant="outline" color="red" leftSection={<IconAlertCircle size={14} />}
+                onClick={() => setIssueOpen(true)}>
+                Report Site Issue
+              </Button>
+
               {/* Submit day flow (T-158) */}
               <Paper withBorder radius="md" p="md">
                 <Stack gap="sm">
@@ -207,10 +265,7 @@ export default function FieldEngineerJobPage() {
                   {!allSystemsDone && (
                     <Text size="sm" c="orange">Complete all system records before submitting.</Text>
                   )}
-                  <Textarea label="Customer Signature (reference / note)"
-                    value={customerSig}
-                    onChange={(e) => setCustomerSig(e.currentTarget.value)}
-                    placeholder="Customer name and sign-off reference" />
+                  <SignaturePad onChange={setCustomerSig} />
                   <Button color="green" leftSection={<IconSend size={14} />}
                     loading={submitting} disabled={submitted}
                     onClick={submitDay}>
@@ -290,6 +345,58 @@ export default function FieldEngineerJobPage() {
             </Stack>
           </Tabs.Panel>
 
+          {/* RAMS & Drawings */}
+          <Tabs.Panel value="documents" pt="md">
+            <Paper withBorder radius="md" p="md">
+              <Stack gap="sm">
+                <Text fw={600} size="sm">Site Documents</Text>
+                {(job as any).ramsUploaded ? (
+                  <Table withTableBorder withColumnBorders>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Document</Table.Th>
+                        <Table.Th>Status</Table.Th>
+                        <Table.Th>Action</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {[
+                        { name: 'RAMS Pack', available: (job as any).ramsUploaded },
+                        { name: 'Method Statement', available: (job as any).ramsUploaded },
+                        { name: 'Risk Assessment', available: (job as any).ramsUploaded },
+                      ].map(doc => (
+                        <Table.Tr key={doc.name}>
+                          <Table.Td>{doc.name}</Table.Td>
+                          <Table.Td>
+                            <Badge color={doc.available ? 'green' : 'gray'} size="sm" variant="light">
+                              {doc.available ? 'Uploaded' : 'Not Available'}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Button size="xs" variant="outline" leftSection={<IconDownload size={12} />}
+                              disabled={!doc.available}
+                              onClick={async () => {
+                                try {
+                                  const docs = await fieldEngineerApi.getRams(djId!);
+                                  if (docs[0]) window.open(docs[0].url, '_blank');
+                                } catch { /* no document available */ }
+                              }}>
+                              Download
+                            </Button>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                ) : (
+                  <Alert color="yellow" icon={<IconAlertCircle size={14} />} variant="light">
+                    RAMS documents have not been uploaded yet. Contact the office.
+                  </Alert>
+                )}
+              </Stack>
+            </Paper>
+          </Tabs.Panel>
+
           {/* Mini installation calendar (T-160) */}
           <Tabs.Panel value="calendar" pt="md">
             <Paper withBorder radius="md" p="md">
@@ -324,7 +431,106 @@ export default function FieldEngineerJobPage() {
             </Paper>
           </Tabs.Panel>
         </Tabs>
+
+        {/* Report Issue Modal */}
+        <Modal opened={issueOpen} onClose={() => setIssueOpen(false)} title="Report Site Issue" centered>
+          <Stack gap="md">
+            <Textarea label="Issue Description" required placeholder="Describe the issue..."
+              value={issueDesc} onChange={e => setIssueDesc(e.currentTarget.value)} autosize minRows={3} />
+            <Select label="Severity"
+              data={[
+                { value: 'LOW', label: 'Low' },
+                { value: 'MEDIUM', label: 'Medium' },
+                { value: 'HIGH', label: 'High' },
+                { value: 'CRITICAL', label: 'Critical' },
+              ]}
+              value={issueSeverity}
+              onChange={v => v && setIssueSeverity(v)} />
+            <input ref={issuePhotoRef} type="file" accept="image/*" capture="environment"
+              style={{ display: 'none' }}
+              onChange={e => setIssuePhotoFile(e.target.files?.[0] ?? null)} />
+            <Group gap="xs">
+              <Button size="xs" variant="outline" leftSection={<IconCamera size={12} />}
+                onClick={() => issuePhotoRef.current?.click()}>
+                Attach Photo (optional)
+              </Button>
+              {issuePhotoFile && <Text size="xs" c="dimmed">{issuePhotoFile.name}</Text>}
+            </Group>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setIssueOpen(false)}>Cancel</Button>
+              <Button color="red" loading={issueSubmitting} disabled={!issueDesc.trim()} onClick={submitIssue}>
+                Submit Issue
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
       </Stack>
     </Container>
+  );
+}
+
+function SignaturePad({ onChange }: { onChange: (dataUrl: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const [hasSignature, setHasSignature] = useState(false);
+
+  const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ('touches' in e) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+    }
+    return { x: ((e as React.MouseEvent).clientX - rect.left) * scaleX, y: ((e as React.MouseEvent).clientY - rect.top) * scaleY };
+  };
+
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d'); if (!ctx) return;
+    drawing.current = true;
+    const pos = getPos(e, canvas);
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (!drawing.current) return;
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d'); if (!ctx) return;
+    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#000';
+    const pos = getPos(e, canvas);
+    ctx.lineTo(pos.x, pos.y); ctx.stroke();
+    setHasSignature(true);
+  };
+
+  const endDraw = () => {
+    drawing.current = false;
+    const canvas = canvasRef.current; if (!canvas) return;
+    onChange(canvas.toDataURL('image/png'));
+  };
+
+  const clear = () => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d'); if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+    onChange('');
+  };
+
+  return (
+    <Stack gap={4}>
+      <Text size="sm" fw={500}>Customer Signature</Text>
+      <Paper withBorder radius="sm" style={{ overflow: 'hidden', touchAction: 'none', background: '#fff' }}>
+        <canvas ref={canvasRef} width={320} height={120}
+          style={{ display: 'block', cursor: 'crosshair', width: '100%', height: 120 }}
+          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
+      </Paper>
+      <Group justify="space-between">
+        <Text size="xs" c="dimmed">{hasSignature ? 'Signature captured' : 'Sign above'}</Text>
+        <Button size="xs" variant="subtle" color="red" onClick={clear}>Clear</Button>
+      </Group>
+    </Stack>
   );
 }

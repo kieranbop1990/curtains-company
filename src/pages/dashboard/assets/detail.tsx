@@ -4,14 +4,26 @@ import {
   Container, Title, Stack, Group, Button, Paper, Text, Badge,
   Tabs, Grid, Select, NumberInput, TextInput, Switch, Alert,
   Table, Timeline, Loader, Center, Anchor, Breadcrumbs, ThemeIcon,
-  SimpleGrid, Divider, ActionIcon, Modal,
+  SimpleGrid, Divider, ActionIcon, Modal, Textarea,
 } from '@mantine/core';
 import {
   IconAlertCircle, IconChevronRight, IconCalendar, IconTool,
   IconEdit, IconDownload, IconPlus, IconTrash, IconCheck,
 } from '@tabler/icons-react';
 import { assetsApi } from 'src/api/assets';
-import type { Asset, AssetStatus, AssetPriority, AssetContact } from 'src/types/asset';
+import type { Asset, AssetStatus, AssetPriority, AssetContact, AssetDocument } from 'src/types/asset';
+
+function computeServiceDates(
+  lastServiceDate: string | null,
+  serviceFrequencyMonths: number | null,
+): { nextServiceDate: string | null; renewalAlertDate: string | null } {
+  if (!lastServiceDate || !serviceFrequencyMonths) return { nextServiceDate: null, renewalAlertDate: null };
+  const next = new Date(lastServiceDate);
+  next.setMonth(next.getMonth() + serviceFrequencyMonths);
+  const renewal = new Date(next);
+  renewal.setDate(renewal.getDate() - 30);
+  return { nextServiceDate: next.toISOString(), renewalAlertDate: renewal.toISOString() };
+}
 
 const STATUS_COLOR: Record<AssetStatus, string> = {
   LIVE_ACTIVE: 'green',
@@ -54,20 +66,25 @@ export default function AssetDetailPage() {
   const [error, setError] = useState('');
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [linkedAssets, setLinkedAssets] = useState<Asset[]>([]);
-  const [docUploadState, setDocUploadState] = useState<Record<string, 'idle' | 'uploading' | 'done'>>({});
+  const [documents, setDocuments] = useState<AssetDocument[]>([]);
+  const [docUploading, setDocUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingDocType, setPendingDocType] = useState<string | null>(null);
+  const [logEventOpen, setLogEventOpen] = useState(false);
+  const [logEventForm, setLogEventForm] = useState({ serviceDate: '', engineerName: '', company: '', summary: '', outcome: '' });
+  const [logEventSaving, setLogEventSaving] = useState(false);
 
   useEffect(() => {
     if (!assetId) return;
     assetsApi.getAsset(assetId).then(a => {
       setAsset(a);
+      setDocuments(a.documents ?? []);
       setLoading(false);
       assetsApi.getLinkedAssets(assetId).then(setLinkedAssets).catch(() => {});
     }).catch(() => setLoading(false));
   }, [assetId]);
 
-  const handleDocUpload = async (docType: string) => {
+  const handleDocUpload = (docType: string) => {
     setPendingDocType(docType);
     fileInputRef.current?.click();
   };
@@ -75,24 +92,35 @@ export default function AssetDetailPage() {
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!asset || !pendingDocType || !e.target.files?.[0]) return;
     const file = e.target.files[0];
-    setDocUploadState(s => ({ ...s, [pendingDocType]: 'uploading' }));
+    setDocUploading(true);
     try {
-      const { url } = await assetsApi.getDocumentUploadUrl(asset.id, pendingDocType, file.type);
+      const { url } = await assetsApi.getDocumentUploadUrl(asset.id, pendingDocType, file.type, file.name);
       await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
-      setDocUploadState(s => ({ ...s, [pendingDocType!]: 'done' }));
-    } catch {
-      setDocUploadState(s => ({ ...s, [pendingDocType!]: 'idle' }));
+      // Refresh documents list from DB
+      const updated = await assetsApi.getDocuments(asset.id);
+      setDocuments(updated);
+    } catch { /* upload failed */ }
+    finally {
+      setDocUploading(false);
+      e.target.value = '';
+      setPendingDocType(null);
     }
-    e.target.value = '';
-    setPendingDocType(null);
   };
 
-  const handleDocDownload = async (docType: string) => {
+  const handleDocDownload = async (doc: AssetDocument) => {
     if (!asset) return;
     try {
-      const { url } = await assetsApi.getDocumentDownloadUrl(asset.id, docType);
+      const { url } = await assetsApi.getDocumentDownloadUrl(asset.id, undefined, doc.id);
       window.open(url, '_blank');
-    } catch { /* S3 error — file may not exist */ }
+    } catch { /* presign failed */ }
+  };
+
+  const handleDocDelete = async (doc: AssetDocument) => {
+    if (!asset) return;
+    try {
+      await assetsApi.deleteDocument(asset.id, doc.id);
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+    } catch { /* delete failed */ }
   };
 
   const handleField = async (field: string, value: any) => {
@@ -107,6 +135,41 @@ export default function AssetDetailPage() {
   };
 
   const handleToggle = async (field: string, checked: boolean) => handleField(field, checked);
+
+  const handleServiceDateChange = async (
+    field: 'lastServiceDate' | 'serviceFrequencyMonths',
+    value: any,
+  ) => {
+    await handleField(field, value);
+    const freq = field === 'serviceFrequencyMonths' ? value : asset?.serviceFrequencyMonths;
+    const last = field === 'lastServiceDate' ? value : asset?.lastServiceDate;
+    const { nextServiceDate, renewalAlertDate } = computeServiceDates(last, freq);
+    if (nextServiceDate && asset) {
+      setSaving(true);
+      try {
+        const updated = await assetsApi.updateAsset(asset.id, { nextServiceDate, renewalAlertDate });
+        setAsset(updated);
+      } finally { setSaving(false); }
+    }
+  };
+
+  const handleLogEventSubmit = async () => {
+    if (!asset) return;
+    setLogEventSaving(true);
+    try {
+      await assetsApi.addServiceEvent(asset.id, {
+        serviceDate: logEventForm.serviceDate,
+        engineerName: logEventForm.engineerName || undefined,
+        company: logEventForm.company || undefined,
+        summary: logEventForm.summary || undefined,
+        statusLabel: logEventForm.outcome || undefined,
+      });
+      const refreshed = await assetsApi.getAsset(asset.id);
+      setAsset(refreshed);
+      setLogEventOpen(false);
+      setLogEventForm({ serviceDate: '', engineerName: '', company: '', summary: '', outcome: '' });
+    } finally { setLogEventSaving(false); }
+  };
 
   const handleDeleteContact = async (contactId: string) => {
     if (!asset) return;
@@ -238,7 +301,16 @@ export default function AssetDetailPage() {
                   <Paper withBorder radius="md" p="lg">
                     <Title order={4} fw={600} mb="md">Quick Actions</Title>
                     <Stack gap="sm">
-                      <Button variant="outline" size="sm" fullWidth leftSection={<IconCalendar size={14} />} disabled>Book Service Visit</Button>
+                      <Button variant="outline" size="sm" fullWidth leftSection={<IconCalendar size={14} />}
+                        onClick={async () => {
+                          try {
+                            await assetsApi.checkAlerts(asset.id);
+                            const refreshed = await assetsApi.getAsset(asset.id);
+                            setAsset(refreshed);
+                          } catch { /* non-fatal */ }
+                        }}>
+                        Run Service Check
+                      </Button>
                       <Button variant="outline" size="sm" fullWidth leftSection={<IconPlus size={14} />}
                         onClick={() => {
                           const params = new URLSearchParams({
@@ -250,8 +322,10 @@ export default function AssetDetailPage() {
                         }}>
                         Create Service Quote
                       </Button>
-                      <Button variant="outline" size="sm" fullWidth leftSection={<IconEdit size={14} />} disabled>Log Activity / Note</Button>
-                      <Button variant="outline" size="sm" fullWidth leftSection={<IconTool size={14} />} disabled>Report Fault / Repair</Button>
+                      <Button variant="outline" size="sm" fullWidth leftSection={<IconEdit size={14} />}
+                        onClick={() => setLogEventOpen(true)}>Log Activity / Note</Button>
+                      <Button variant="outline" size="sm" fullWidth leftSection={<IconTool size={14} />}
+                        onClick={() => setLogEventOpen(true)}>Report Fault / Repair</Button>
                       <Button variant="outline" size="sm" fullWidth leftSection={<IconDownload size={14} />}
                         onClick={() => window.open(`/api/assets/${asset.id}/pdf`, '_blank')}>Download Asset PDF</Button>
                     </Stack>
@@ -379,30 +453,56 @@ export default function AssetDetailPage() {
                     <NumberInput
                       label="Service Frequency (months)"
                       defaultValue={asset.serviceFrequencyMonths ?? undefined}
-                      onBlur={e => handleField('serviceFrequencyMonths', e.target.value ? Number(e.target.value) : null)}
+                      onBlur={e => handleServiceDateChange('serviceFrequencyMonths', e.target.value ? Number(e.target.value) : null)}
                     />
                   </Grid.Col>
                   <Grid.Col span={3}>
                     <TextInput label="Last Service Date" type="date"
                       defaultValue={asset.lastServiceDate ? asset.lastServiceDate.slice(0, 10) : ''}
-                      onBlur={e => handleField('lastServiceDate', e.target.value || null)} />
+                      onBlur={e => handleServiceDateChange('lastServiceDate', e.target.value || null)} />
                   </Grid.Col>
                   <Grid.Col span={3}>
-                    <TextInput label="Next Service Date" type="date"
-                      defaultValue={asset.nextServiceDate ? asset.nextServiceDate.slice(0, 10) : ''}
-                      onBlur={e => handleField('nextServiceDate', e.target.value || null)} />
+                    {(() => {
+                      const computed = computeServiceDates(asset.lastServiceDate, asset.serviceFrequencyMonths);
+                      const val = asset.nextServiceDate ?? computed.nextServiceDate;
+                      return (
+                        <TextInput
+                          label="Next Service Date"
+                          type="date"
+                          readOnly
+                          value={val ? val.slice(0, 10) : ''}
+                          description="Auto-calculated from last service + frequency"
+                        />
+                      );
+                    })()}
                   </Grid.Col>
                   <Grid.Col span={3}>
-                    <TextInput label="Renewal / Check Alert Date" type="date"
-                      defaultValue={asset.renewalAlertDate ? asset.renewalAlertDate.slice(0, 10) : ''}
-                      onBlur={e => handleField('renewalAlertDate', e.target.value || null)} />
+                    {(() => {
+                      const computed = computeServiceDates(asset.lastServiceDate, asset.serviceFrequencyMonths);
+                      const val = asset.renewalAlertDate ?? computed.renewalAlertDate;
+                      return (
+                        <TextInput
+                          label="Renewal Alert Date"
+                          type="date"
+                          readOnly
+                          value={val ? val.slice(0, 10) : ''}
+                          description="Auto-set 30 days before next service"
+                        />
+                      );
+                    })()}
                   </Grid.Col>
                 </Grid>
               </Paper>
 
               {/* Service History Table */}
               <Paper withBorder radius="md" p="lg">
-                <Title order={4} fw={600} mb="md">Service History</Title>
+                <Group justify="space-between" mb="md">
+                  <Title order={4} fw={600}>Service History</Title>
+                  <Button size="sm" variant="outline" leftSection={<IconPlus size={14} />}
+                    onClick={() => setLogEventOpen(true)}>
+                    Log Service Event
+                  </Button>
+                </Group>
                 {asset.serviceEvents.length === 0 ? (
                   <Text size="sm" c="dimmed">No service records yet.</Text>
                 ) : (
@@ -498,49 +598,83 @@ export default function AssetDetailPage() {
 
           {/* DOCUMENTS TAB */}
           <Tabs.Panel value="documents" pt="lg">
-            <Paper withBorder radius="md" p="lg">
-              <Title order={4} fw={600} mb="md">Asset Documents</Title>
+            <Stack gap="md">
               <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileSelected} />
-              <Table withTableBorder withColumnBorders>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Document Type</Table.Th>
-                    <Table.Th>Status</Table.Th>
-                    <Table.Th>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {[
-                    'Installation Certificate',
-                    'Commissioning Document',
-                    'QA Checklist / Electrical',
-                    'Test Certificate',
-                    'Maintenance Manual',
-                    'Warranty Certificate',
-                  ].map(docType => (
-                    <Table.Tr key={docType}>
-                      <Table.Td>{docType}</Table.Td>
-                      <Table.Td>
-                        {docUploadState[docType] === 'done'
-                          ? <Badge color="green" size="sm" variant="light">Uploaded</Badge>
-                          : docUploadState[docType] === 'uploading'
-                          ? <Badge color="yellow" size="sm" variant="light">Uploading…</Badge>
-                          : <Text size="sm" c="dimmed">Not uploaded</Text>
-                        }
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Button size="xs" variant="outline"
-                            loading={docUploadState[docType] === 'uploading'}
-                            onClick={() => handleDocUpload(docType)}>Upload</Button>
-                          <Button size="xs" variant="outline" onClick={() => handleDocDownload(docType)}>Download</Button>
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Paper>
+
+              {/* Upload new document */}
+              <Paper withBorder radius="md" p="lg">
+                <Group justify="space-between" mb="md">
+                  <Title order={4} fw={600}>Asset Documents</Title>
+                  <Select
+                    placeholder="Select type to upload…"
+                    size="sm"
+                    style={{ width: 240 }}
+                    data={[
+                      'Installation Certificate',
+                      'Commissioning Document',
+                      'QA Checklist / Electrical',
+                      'Test Certificate',
+                      'Maintenance Manual',
+                      'Warranty Certificate',
+                      'RAMS',
+                      'Risk Assessment',
+                      'Method Statement',
+                      'Other',
+                    ]}
+                    onChange={v => v && handleDocUpload(v)}
+                    value={null}
+                  />
+                </Group>
+                {docUploading && (
+                  <Alert color="blue" variant="light" mb="md">Uploading…</Alert>
+                )}
+                {documents.length === 0 ? (
+                  <Text c="dimmed" size="sm">No documents uploaded yet. Select a type above to upload the first one.</Text>
+                ) : (
+                  <Table withTableBorder withColumnBorders striped>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Document Type</Table.Th>
+                        <Table.Th>File Name</Table.Th>
+                        <Table.Th>Uploaded By</Table.Th>
+                        <Table.Th>Date</Table.Th>
+                        <Table.Th>Actions</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {documents.map(doc => (
+                        <Table.Tr key={doc.id}>
+                          <Table.Td>
+                            <Badge size="sm" variant="light">{doc.docType}</Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {doc.fileName}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td><Text size="sm">{doc.uploadedBy || '—'}</Text></Table.Td>
+                          <Table.Td>
+                            <Text size="sm">{new Date(doc.uploadedAt).toLocaleDateString('en-GB')}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap="xs">
+                              <Button size="xs" variant="outline" leftSection={<IconDownload size={12} />}
+                                onClick={() => handleDocDownload(doc)}>
+                                Download
+                              </Button>
+                              <ActionIcon size="sm" color="red" variant="subtle"
+                                onClick={() => handleDocDelete(doc)}>
+                                <IconTrash size={14} />
+                              </ActionIcon>
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                )}
+              </Paper>
+            </Stack>
           </Tabs.Panel>
 
           {/* COMPLIANCE TAB */}
@@ -641,6 +775,39 @@ export default function AssetDetailPage() {
           </Tabs.Panel>
         </Tabs>
       </Stack>
+
+      {/* Log Service Event Modal */}
+      <Modal opened={logEventOpen} onClose={() => setLogEventOpen(false)} title="Log Service Event" size="md">
+        <Stack gap="md">
+          <TextInput label="Service Date" type="date" required
+            value={logEventForm.serviceDate}
+            onChange={e => setLogEventForm(f => ({ ...f, serviceDate: e.currentTarget.value }))} />
+          <TextInput label="Engineer Name"
+            value={logEventForm.engineerName}
+            onChange={e => setLogEventForm(f => ({ ...f, engineerName: e.currentTarget.value }))} />
+          <TextInput label="Company"
+            value={logEventForm.company}
+            onChange={e => setLogEventForm(f => ({ ...f, company: e.currentTarget.value }))} />
+          <Textarea label="Summary / Work Done" autosize minRows={3}
+            value={logEventForm.summary}
+            onChange={e => setLogEventForm(f => ({ ...f, summary: e.currentTarget.value }))} />
+          <Select label="Outcome"
+            data={[
+              { value: 'PASS', label: 'Pass' },
+              { value: 'FAIL', label: 'Fail' },
+              { value: 'ADVISORY', label: 'Advisory' },
+              { value: 'PARTS_REQUIRED', label: 'Parts Required' },
+            ]}
+            value={logEventForm.outcome || null}
+            onChange={v => setLogEventForm(f => ({ ...f, outcome: v ?? '' }))} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setLogEventOpen(false)}>Cancel</Button>
+            <Button loading={logEventSaving} disabled={!logEventForm.serviceDate} onClick={handleLogEventSubmit}>
+              Save Service Record
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <AddContactModal
         opened={addContactOpen}

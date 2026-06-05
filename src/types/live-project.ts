@@ -11,6 +11,8 @@ export interface LQInvoice {
   amount: number;
   dueDate: string | null;
   xeroInvoiceId: string | null;
+  s3Key: string | null;
+  fileName: string | null;
 }
 
 export interface LQDrawing {
@@ -18,6 +20,8 @@ export interface LQDrawing {
   drawingNumber: string;
   description: string;
   status: DrawingStatus;
+  s3Key: string | null;
+  fileName: string | null;
 }
 
 export interface LQInstallationItem {

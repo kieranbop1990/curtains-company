@@ -7,6 +7,7 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconAlertCircle, IconCheck, IconX } from '@tabler/icons-react';
 import { manufacturingApi } from 'src/api/production-pack';
+import { staffApi } from 'src/api/staff';
 import type { ManufacturingJob, MfgStatus, MfgQcCheckpoint, MfgFabricRow, MfgComponent } from 'src/types/production-pack';
 
 const MFG_STATUS_STEPS: MfgStatus[] = [
@@ -36,6 +37,7 @@ export default function ManufacturingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [productionStaff, setProductionStaff] = useState<{ value: string; label: string }[]>([]);
 
   const load = useCallback(() => {
     if (!jobId) return;
@@ -47,6 +49,13 @@ export default function ManufacturingDetailPage() {
   }, [jobId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    staffApi.getAll().then(all => {
+      const filtered = all.filter(s => s.active && ['PRODUCTION', 'ENGINEER_FIELD', 'ADMIN'].includes(s.role));
+      setProductionStaff(filtered.map(s => ({ value: s.name, label: s.name })));
+    });
+  }, []);
 
   const save = async (patch: Partial<ManufacturingJob>) => {
     if (!jobId) return;
@@ -173,8 +182,16 @@ export default function ManufacturingDetailPage() {
                         onBlur={(e) => save({ requiredByDate: e.currentTarget.value || null })} />
                     </Grid.Col>
                     <Grid.Col span={4}>
-                      <TextInput label="Engineer" value={job.engineerName ?? ''}
-                        onChange={(e) => save({ engineerName: e.currentTarget.value })} />
+                      <Select
+                        label="Engineer"
+                        placeholder="Select engineer"
+                        searchable
+                        clearable
+                        data={productionStaff}
+                        value={job.engineerName ?? null}
+                        onChange={v => save({ engineerName: v ?? null })}
+                        nothingFoundMessage="No production staff found"
+                      />
                     </Grid.Col>
                   </Grid>
                 </Stack>

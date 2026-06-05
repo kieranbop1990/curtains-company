@@ -101,7 +101,7 @@ railway variable set VITE_AWS_USER_POOLS_WEB_CLIENT_ID=3pfdfs2jjp33jvesvc353pc4g
 railway variable set VITE_COGNITO_DOMAIN=https://eu-west-2dlwfbfchs.auth.eu-west-2.amazoncognito.com --service web --skip-deploys
 
 # Deploy (vars are now baked in)
-railway up . --service web
+railway up --service web
 ```
 
 After the first deploy, get the Railway web URL and add it to Cognito's allowed callback URLs (see Phase 1).
@@ -141,7 +141,7 @@ railway variable list --service web --kv
 ```bash
 # Rebuild and redeploy from source
 railway up ./backend --path-as-root --service api
-railway up . --service web
+railway up  --service web
 
 # Restart without rebuilding (config-only changes)
 railway restart --service api

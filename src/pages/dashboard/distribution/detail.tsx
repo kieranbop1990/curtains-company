@@ -7,7 +7,9 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconAlertCircle, IconPlus, IconTrash, IconDownload } from '@tabler/icons-react';
 import { distributionApi } from 'src/api/distribution';
+import { staffApi } from 'src/api/staff';
 import type { DistributionJob, InstallationEngineer, PaymentMilestone, InstallationProgressStep } from 'src/types/distribution';
+import type { StaffMember } from 'src/types/staff';
 
 const DIST_LABELS = { COLLECTION: '6A — Collection', DELIVERY: '6B — Delivery', INSTALLATION: '6C — Installation' };
 
@@ -52,6 +54,15 @@ export default function DistributionJobDetailPage() {
   const [addEngOpen, setAddEngOpen] = useState(false);
   const [addMilestoneOpen, setAddMilestoneOpen] = useState(false);
   const [newEngName, setNewEngName] = useState('');
+  const [fieldEngineers, setFieldEngineers] = useState<StaffMember[]>([]);
+
+  useEffect(() => {
+    if (addEngOpen) {
+      staffApi.getAll().then(all =>
+        setFieldEngineers(all.filter(s => s.role === 'ENGINEER_FIELD' && s.active))
+      );
+    }
+  }, [addEngOpen]);
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneAmount, setNewMilestoneAmount] = useState<number | string>('');
   const [newMilestoneEvent, setNewMilestoneEvent] = useState('');
@@ -245,7 +256,7 @@ export default function DistributionJobDetailPage() {
                 </Grid>
                 {dj.collectionSignature && (
                   <Button variant="light" size="sm" leftSection={<IconDownload size={14} />}
-                    component="a" href={distributionApi.getPocUrl(dj.id)} target="_blank">
+                    onClick={() => distributionApi.generatePoc(dj.id).catch(() => {})}>
                     Download Proof of Collection (PDF)
                   </Button>
                 )}
@@ -333,7 +344,7 @@ export default function DistributionJobDetailPage() {
                   disabled={!deliveryChecklistComplete} />
                 {dj.deliverySignature && (
                   <Button variant="light" size="sm" leftSection={<IconDownload size={14} />}
-                    component="a" href={distributionApi.getPodUrl(dj.id)} target="_blank">
+                    onClick={() => distributionApi.generatePod(dj.id).catch(() => {})}>
                     Download Proof of Delivery (PDF)
                   </Button>
                 )}
@@ -429,6 +440,7 @@ export default function DistributionJobDetailPage() {
                           <Table.Th>Travel (£)</Table.Th>
                           <Table.Th>Night Rate (£)</Table.Th>
                           <Table.Th>Hotel (£)</Table.Th>
+                          <Table.Th></Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
@@ -463,6 +475,15 @@ export default function DistributionJobDetailPage() {
                               <NumberInput size="xs" min={0} decimalScale={2}
                                 value={eng.hotelCost ?? ''}
                                 onChange={(v) => updateEngineerField(eng, 'hotelCost', v)} />
+                            </Table.Td>
+                            <Table.Td>
+                              <ActionIcon size="xs" color="red" variant="subtle"
+                                onClick={async () => {
+                                  await distributionApi.deleteEngineer(dj.id, eng.id);
+                                  load();
+                                }}>
+                                <IconTrash size={12} />
+                              </ActionIcon>
                             </Table.Td>
                           </Table.Tr>
                         ))}
@@ -669,12 +690,24 @@ export default function DistributionJobDetailPage() {
       </Stack>
 
       {/* Add Engineer Modal */}
-      <Modal opened={addEngOpen} onClose={() => setAddEngOpen(false)} title="Add Engineer">
+      <Modal
+        opened={addEngOpen}
+        onClose={() => { setAddEngOpen(false); setNewEngName(''); }}
+        title="Add Engineer"
+      >
         <Stack gap="sm">
-          <TextInput label="Engineer Name" required value={newEngName}
-            onChange={(e) => setNewEngName(e.currentTarget.value)} />
+          <Select
+            label="Engineer"
+            placeholder="Select a field engineer"
+            required
+            searchable
+            data={fieldEngineers.map(e => ({ value: e.name, label: e.name }))}
+            value={newEngName}
+            onChange={(v) => setNewEngName(v ?? '')}
+            nothingFoundMessage="No field engineers found in staff directory"
+          />
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setAddEngOpen(false)}>Cancel</Button>
+            <Button variant="default" onClick={() => { setAddEngOpen(false); setNewEngName(''); }}>Cancel</Button>
             <Button onClick={addEngineer} disabled={!newEngName}>Add</Button>
           </Group>
         </Stack>

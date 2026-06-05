@@ -1,5 +1,23 @@
 import { apiClient } from './client';
+import { userManager } from 'src/lib/user-manager';
 import type { LiveProject, LQRoutingDecision } from 'src/types/live-project';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+async function downloadFileViaGet(path: string): Promise<void> {
+  const user = await userManager.getUser().catch(() => null);
+  const token = user?.id_token ?? '';
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Download failed');
+  const data = await res.json() as { url: string; fileName?: string };
+  const a = document.createElement('a');
+  a.href = data.url;
+  a.download = data.fileName ?? 'download';
+  a.target = '_blank';
+  a.click();
+}
 
 export const liveProjectsApi = {
   async getAll(params?: { stage?: string; search?: string }): Promise<LiveProject[]> {
@@ -30,6 +48,14 @@ export const liveProjectsApi = {
     return apiClient.post<LiveProject>(`/api/live-projects/${id}/route`, { decision });
   },
 
+  async clearRouting(id: string): Promise<LiveProject> {
+    return apiClient.post<LiveProject>(`/api/live-projects/${id}/clear-routing`);
+  },
+
+  async resetToLq(id: string): Promise<LiveProject> {
+    return apiClient.post<LiveProject>(`/api/live-projects/${id}/reset-to-lq`);
+  },
+
   async addInvoice(id: string, inv: { invoiceNumber: string; amount: number; status?: string; dueDate?: string }) {
     return apiClient.post(`/api/live-projects/${id}/invoices`, inv);
   },
@@ -40,6 +66,14 @@ export const liveProjectsApi = {
 
   async deleteInvoice(id: string, invId: string) {
     return apiClient.del(`/api/live-projects/${id}/invoices/${invId}`);
+  },
+
+  async getInvoiceUploadUrl(id: string, invId: string, contentType: string, fileName: string): Promise<{ url: string; fileName: string }> {
+    return apiClient.post(`/api/live-projects/${id}/invoices/${invId}/upload-url`, { contentType, fileName });
+  },
+
+  async downloadInvoice(id: string, invId: string): Promise<void> {
+    return downloadFileViaGet(`/api/live-projects/${id}/invoices/${invId}/download-url`);
   },
 
   async syncXeroInvoices(id: string) {
@@ -56,6 +90,14 @@ export const liveProjectsApi = {
 
   async deleteDrawing(id: string, drawingId: string) {
     return apiClient.del(`/api/live-projects/${id}/drawings/${drawingId}`);
+  },
+
+  async getDrawingUploadUrl(id: string, drawingId: string, contentType: string, fileName: string): Promise<{ url: string; fileName: string }> {
+    return apiClient.post(`/api/live-projects/${id}/drawings/${drawingId}/upload-url`, { contentType, fileName });
+  },
+
+  async downloadDrawing(id: string, drawingId: string): Promise<void> {
+    return downloadFileViaGet(`/api/live-projects/${id}/drawings/${drawingId}/download-url`);
   },
 
   async addInstallationItem(id: string, item: any) {

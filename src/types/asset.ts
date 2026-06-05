@@ -17,6 +17,14 @@ export interface AssetServiceEvent {
   statusLabel: string;
 }
 
+export interface AssetDocument {
+  id: string;
+  docType: string;
+  fileName: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
 export interface Asset {
   id: string;
   assetRef: string;
@@ -61,6 +69,7 @@ export interface Asset {
   annualRevenue: number | null;
   contacts: AssetContact[];
   serviceEvents: AssetServiceEvent[];
+  documents: AssetDocument[];
   createdAt: string;
   updatedAt: string;
 }
