@@ -8,6 +8,7 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconPlus, IconTrash, IconAlertCircle, IconRefresh } from '@tabler/icons-react';
 import { serviceQuotesApi } from 'src/api/service-operations';
+import { staffApi } from 'src/api/staff';
 import type { ServiceQuote, ServiceQuoteStatus, ChaseEntry } from 'src/types/service-operations';
 
 const STATUS_STEPS: ServiceQuoteStatus[] = ['QUOTE_DRAFTED', 'SENT', 'CHASING', 'ORDER_PLACED', 'LIVE_CLOSED'];
@@ -50,6 +51,7 @@ export default function ServiceQuoteDetailPage() {
   const [chaseDate, setChaseDate] = useState(new Date().toISOString().slice(0, 10));
   const [chasedBy, setChasedBy] = useState('');
   const [chaseMethod, setChaseMethod] = useState('');
+  const [officeStaff, setOfficeStaff] = useState<{ value: string; label: string }[]>([]);
   const [chaseOutcome, setChaseOutcome] = useState('');
   const [chaseNextDate, setChaseNextDate] = useState('');
 
@@ -63,6 +65,12 @@ export default function ServiceQuoteDetailPage() {
   }, [quoteId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    staffApi.getAll().then(all => {
+      setOfficeStaff(all.filter(s => s.active && (s.role === 'OFFICE_OPERATIONS' || s.role === 'ADMIN')).map(s => ({ value: s.name, label: s.name })));
+    });
+  }, []);
 
   const save = async (patch: Partial<ServiceQuote>) => {
     if (!quoteId || !quote) return;
@@ -409,7 +417,10 @@ export default function ServiceQuoteDetailPage() {
       <Modal opened={chaseModalOpen} onClose={() => setChaseModalOpen(false)} title="Add Chase Entry">
         <Stack gap="sm">
           <TextInput label="Chase Date" type="date" required value={chaseDate} onChange={(e) => setChaseDate(e.currentTarget.value)} />
-          <TextInput label="Chased By" required value={chasedBy} onChange={(e) => setChasedBy(e.currentTarget.value)} />
+          <Select label="Chased By" required placeholder="Select staff member"
+            data={officeStaff} searchable clearable
+            value={chasedBy || null}
+            onChange={v => setChasedBy(v ?? '')} />
           <TextInput label="Method" value={chaseMethod} onChange={(e) => setChaseMethod(e.currentTarget.value)} />
           <Textarea label="Outcome" value={chaseOutcome} onChange={(e) => setChaseOutcome(e.currentTarget.value)} />
           <TextInput label="Next Action Date" type="date" value={chaseNextDate} onChange={(e) => setChaseNextDate(e.currentTarget.value)} />

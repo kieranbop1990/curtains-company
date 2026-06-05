@@ -12,10 +12,10 @@ import '@mantine/notifications/styles.css';
 import { userManager } from 'src/lib/user-manager';
 import { App } from 'src/app';
 
-// Register service worker for Field Engineer PWA (T-150)
+// Unregister any previously installed service workers
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {/* non-critical */});
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(r => r.unregister());
   });
 }
 

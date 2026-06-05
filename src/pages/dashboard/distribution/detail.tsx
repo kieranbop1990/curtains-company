@@ -56,12 +56,13 @@ export default function DistributionJobDetailPage() {
   const [newEngName, setNewEngName] = useState('');
   const [fieldEngineers, setFieldEngineers] = useState<StaffMember[]>([]);
 
+  const [allStaff, setAllStaff] = useState<{ value: string; label: string }[]>([]);
+
   useEffect(() => {
-    if (addEngOpen) {
-      staffApi.getAll().then(all =>
-        setFieldEngineers(all.filter(s => s.role === 'ENGINEER_FIELD' && s.active))
-      );
-    }
+    staffApi.getAll().then(all => {
+      setAllStaff(all.filter(s => s.active).map(s => ({ value: s.name, label: `${s.name} (${s.role.replace('_', ' ')})` })));
+      if (addEngOpen) setFieldEngineers(all.filter(s => s.role === 'ENGINEER_FIELD' && s.active));
+    });
   }, [addEngOpen]);
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneAmount, setNewMilestoneAmount] = useState<number | string>('');
@@ -237,8 +238,10 @@ export default function DistributionJobDetailPage() {
                 )}
                 <Grid gap="sm">
                   <Grid.Col span={6}>
-                    <TextInput label="Collection Rep" value={dj.collectionRep ?? ''}
-                      onChange={(e) => save({ collectionRep: e.currentTarget.value })}
+                    <Select label="Collection Rep" placeholder="Select staff member"
+                      data={allStaff} searchable clearable
+                      value={dj.collectionRep ?? null}
+                      onChange={(v) => save({ collectionRep: v ?? null })}
                       disabled={!packChecklistComplete} />
                   </Grid.Col>
                   <Grid.Col span={6}>

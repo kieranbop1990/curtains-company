@@ -38,6 +38,7 @@ export default function ManufacturingDetailPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [productionStaff, setProductionStaff] = useState<{ value: string; label: string }[]>([]);
+  const [approvalStaff, setApprovalStaff] = useState<{ value: string; label: string }[]>([]);
 
   const load = useCallback(() => {
     if (!jobId) return;
@@ -52,8 +53,9 @@ export default function ManufacturingDetailPage() {
 
   useEffect(() => {
     staffApi.getAll().then(all => {
-      const filtered = all.filter(s => s.active && ['PRODUCTION', 'ENGINEER_FIELD', 'ADMIN'].includes(s.role));
-      setProductionStaff(filtered.map(s => ({ value: s.name, label: s.name })));
+      const active = all.filter(s => s.active);
+      setProductionStaff(active.filter(s => ['PRODUCTION', 'ENGINEER_FIELD', 'ADMIN'].includes(s.role)).map(s => ({ value: s.name, label: s.name })));
+      setApprovalStaff(active.filter(s => ['ADMIN', 'OFFICE_OPERATIONS'].includes(s.role)).map(s => ({ value: s.name, label: s.name })));
     });
   }, []);
 
@@ -289,12 +291,16 @@ export default function ManufacturingDetailPage() {
                   <Text fw={600} size="sm">Production Approval Sign-Off</Text>
                   <Grid gap="sm">
                     <Grid.Col span={6}>
-                      <TextInput label="Approved By" value={job.approvedBy ?? ''}
-                        onChange={(e) => save({ approvedBy: e.currentTarget.value })} />
+                      <Select label="Approved By" placeholder="Select approver"
+                        data={approvalStaff} searchable clearable
+                        value={job.approvedBy ?? null}
+                        onChange={(v) => save({ approvedBy: v ?? null })} />
                     </Grid.Col>
                     <Grid.Col span={6}>
-                      <TextInput label="Authorised By" value={job.authorisedBy ?? ''}
-                        onChange={(e) => save({ authorisedBy: e.currentTarget.value })} />
+                      <Select label="Authorised By" placeholder="Select authoriser"
+                        data={approvalStaff} searchable clearable
+                        value={job.authorisedBy ?? null}
+                        onChange={(v) => save({ authorisedBy: v ?? null })} />
                     </Grid.Col>
                   </Grid>
                 </Stack>

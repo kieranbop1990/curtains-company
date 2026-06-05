@@ -11,6 +11,7 @@ import {
   IconEdit, IconDownload, IconPlus, IconTrash, IconCheck,
 } from '@tabler/icons-react';
 import { assetsApi } from 'src/api/assets';
+import { staffApi } from 'src/api/staff';
 import type { Asset, AssetStatus, AssetPriority, AssetContact, AssetDocument } from 'src/types/asset';
 
 function computeServiceDates(
@@ -66,6 +67,7 @@ export default function AssetDetailPage() {
   const [error, setError] = useState('');
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [linkedAssets, setLinkedAssets] = useState<Asset[]>([]);
+  const [fieldStaff, setFieldStaff] = useState<{ value: string; label: string }[]>([]);
   const [documents, setDocuments] = useState<AssetDocument[]>([]);
   const [docUploading, setDocUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +84,9 @@ export default function AssetDetailPage() {
       setLoading(false);
       assetsApi.getLinkedAssets(assetId).then(setLinkedAssets).catch(() => {});
     }).catch(() => setLoading(false));
+    staffApi.getAll().then(all => {
+      setFieldStaff(all.filter(s => s.active && (s.role === 'ENGINEER_FIELD' || s.role === 'ADMIN')).map(s => ({ value: s.name, label: s.name })));
+    }).catch(() => {});
   }, [assetId]);
 
   const handleDocUpload = (docType: string) => {
@@ -782,9 +787,10 @@ export default function AssetDetailPage() {
           <TextInput label="Service Date" type="date" required
             value={logEventForm.serviceDate}
             onChange={e => setLogEventForm(f => ({ ...f, serviceDate: e.currentTarget.value }))} />
-          <TextInput label="Engineer Name"
-            value={logEventForm.engineerName}
-            onChange={e => setLogEventForm(f => ({ ...f, engineerName: e.currentTarget.value }))} />
+          <Select label="Engineer Name" placeholder="Select engineer"
+            data={fieldStaff} searchable clearable
+            value={logEventForm.engineerName || null}
+            onChange={v => setLogEventForm(f => ({ ...f, engineerName: v ?? '' }))} />
           <TextInput label="Company"
             value={logEventForm.company}
             onChange={e => setLogEventForm(f => ({ ...f, company: e.currentTarget.value }))} />

@@ -87,6 +87,7 @@ export default function LiveProjectDetailPage() {
   const [addCompOpen, setAddCompOpen] = useState(false);
   const [xeroSyncing, setXeroSyncing] = useState(false);
   const [officeStaff, setOfficeStaff] = useState<{ value: string; label: string }[]>([]);
+  const [surveyStaff, setSurveyStaff] = useState<{ value: string; label: string }[]>([]);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [pendingUpload, setPendingUpload] = useState<{ type: 'drawing' | 'invoice'; id: string } | null>(null);
   const [routingCreating, setRoutingCreating] = useState(false);
@@ -100,8 +101,9 @@ export default function LiveProjectDetailPage() {
 
   useEffect(() => {
     staffApi.getAll().then(all => {
-      const filtered = all.filter(s => s.active && (s.role === 'OFFICE_OPERATIONS' || s.role === 'ADMIN'));
-      setOfficeStaff(filtered.map(s => ({ value: s.name, label: s.name })));
+      const active = all.filter(s => s.active);
+      setOfficeStaff(active.filter(s => s.role === 'OFFICE_OPERATIONS' || s.role === 'ADMIN').map(s => ({ value: s.name, label: s.name })));
+      setSurveyStaff(active.map(s => ({ value: s.name, label: `${s.name} (${s.role.replace(/_/g, ' ')})` })));
     });
   }, []);
 
@@ -403,9 +405,10 @@ export default function LiveProjectDetailPage() {
                           onBlur={e => handleField('surveyCompletionDate', e.target.value || null)} />
                       </Grid.Col>
                       <Grid.Col span={3}>
-                        <TextInput label="Surveyor Name"
-                          defaultValue={lp.surveyorName}
-                          onBlur={e => { if (e.target.value !== lp.surveyorName) handleField('surveyorName', e.target.value); }} />
+                        <Select label="Surveyor Name" placeholder="Select surveyor"
+                          data={surveyStaff} searchable clearable
+                          value={lp.surveyorName || null}
+                          onChange={v => handleField('surveyorName', v ?? '')} />
                       </Grid.Col>
                       <Grid.Col span={3}>
                         <TextInput label="Survey Method"
