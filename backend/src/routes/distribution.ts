@@ -184,6 +184,21 @@ distributionRoutes.post('/:id/generate-poc', requireRole(...PERMISSIONS.fullCrm 
   if (!dj) return c.json({ error: 'Not found' }, 404);
   const buffer = await generateDocument('PROOF_OF_COLLECTION', formatDj(dj));
   await prisma.distributionJob.update({ where: { id: dj.id }, data: { pocGenerated: true, djStatus: 'COLLECTED' } });
+
+  // Auto-notify on collection
+  const notifyTargets = [
+    { role: 'Sales', email: process.env.SALES_EMAIL ?? 'sales@example.com' },
+    { role: 'Operations', email: process.env.OFFICE_EMAIL ?? 'operations@example.com' },
+  ];
+  await Promise.allSettled(notifyTargets.map(({ role, email }) =>
+    sendEmail(
+      email,
+      `Collection Confirmed — POC Generated for ${dj.djRef}`,
+      `<p>Dear ${role},</p><p>A Proof of Collection has been generated for job <strong>${dj.djRef}</strong> (${dj.customerName ?? 'Unknown'}).</p><p>Collected: ${dj.collectedAt ? new Date(dj.collectedAt).toLocaleString('en-GB') : 'N/A'}</p><p>View job: ${process.env.APP_URL ?? 'https://app.firecurtains.local'}/dashboard/distribution/${dj.id}</p>`,
+      [{ filename: `POC-${dj.djRef}.pdf`, content: buffer as Buffer, contentType: 'application/pdf' }],
+    )
+  ));
+
   c.header('Content-Type', 'application/pdf');
   c.header('Content-Disposition', `attachment; filename="POC-${dj.djRef}.pdf"`);
   return c.body(buffer as any);

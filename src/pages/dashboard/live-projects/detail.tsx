@@ -5,7 +5,7 @@ import {
   Grid, TextInput, NumberInput, Checkbox, Select, Alert,
   Table, ActionIcon, Modal, Textarea, Loader, Center,
   Anchor, Breadcrumbs, SimpleGrid, Divider, Stepper, RingProgress,
-  ThemeIcon, Tooltip,
+  ThemeIcon,
 } from '@mantine/core';
 import {
   IconAlertCircle, IconChevronRight, IconPlus, IconTrash,
@@ -14,6 +14,8 @@ import {
 } from '@tabler/icons-react';
 import { liveProjectsApi } from 'src/api/live-projects';
 import { staffApi } from 'src/api/staff';
+import { StageSummaryBar } from 'src/components/StageSummaryBar';
+import { StageProgress } from 'src/components/StageProgress';
 import type {
   LiveProject, DrawingStatus, ReviewStatus, LQInvoice, LQDrawing, LQComponent, LQInstallationItem,
 } from 'src/types/live-project';
@@ -83,6 +85,7 @@ export default function LiveProjectDetailPage() {
   const [error, setError] = useState('');
   const [addInvOpen, setAddInvOpen] = useState(false);
   const [addDrawingOpen, setAddDrawingOpen] = useState(false);
+  const [addCostOpen, setAddCostOpen] = useState(false);
   const [addInstOpen, setAddInstOpen] = useState(false);
   const [addCompOpen, setAddCompOpen] = useState(false);
   const [xeroSyncing, setXeroSyncing] = useState(false);
@@ -212,6 +215,8 @@ export default function LiveProjectDetailPage() {
     <Container size="xl" py="xl">
       <input ref={fileInputRef} type="file" accept=".pdf,.dwg,.dxf,.png,.jpg" style={{ display: 'none' }} onChange={handleFileUpload} />
       <Stack gap="lg">
+        <StageProgress current={lp.stage === 'LQ' ? 'live-quotes' : 'survey-drawings'} />
+
         <Breadcrumbs separator={<IconChevronRight size={14} />}>
           <Anchor onClick={() => navigate('/dashboard/live-projects')} size="sm">Live Projects</Anchor>
           <Text size="sm">{lp.lqRef}</Text>
@@ -266,6 +271,50 @@ export default function LiveProjectDetailPage() {
                     onBlur={e => { if (e.target.value !== lp.paymentTerms) handleField('paymentTerms', e.target.value); }}
                     w={180} />
                 </Group>
+              </Paper>
+
+              {/* Costing Breakdown — Installation & Commissioning Allowance */}
+              <Paper withBorder radius="md" p="lg">
+                <Group justify="space-between" mb="md">
+                  <Title order={4} fw={600}>Costing — Installation & Commissioning</Title>
+                  <Button size="xs" variant="outline" leftSection={<IconPlus size={12} />} onClick={() => setAddCostOpen(true)}>Add Line</Button>
+                </Group>
+                {(lp.costingItems ?? []).length === 0 ? (
+                  <Text size="sm" c="dimmed">No costing lines added. Click "Add Line" to break down costs.</Text>
+                ) : (
+                  <Table withTableBorder withColumnBorders>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Description</Table.Th>
+                        <Table.Th>Qty</Table.Th>
+                        <Table.Th>Unit Cost (£)</Table.Th>
+                        <Table.Th>Total (£)</Table.Th>
+                        <Table.Th></Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {(lp.costingItems ?? []).map(item => (
+                        <Table.Tr key={item.id}>
+                          <Table.Td>{item.description}</Table.Td>
+                          <Table.Td>{item.qty}</Table.Td>
+                          <Table.Td>{fmtCurrency(item.unitCost)}</Table.Td>
+                          <Table.Td fw={600}>{fmtCurrency(item.total)}</Table.Td>
+                          <Table.Td>
+                            <ActionIcon size="xs" color="red" variant="subtle"
+                              onClick={async () => { await liveProjectsApi.deleteCostingItem(lp.id, item.id); reload(); }}>
+                              <IconTrash size={12} />
+                            </ActionIcon>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                      <Table.Tr style={{ fontWeight: 700 }}>
+                        <Table.Td colSpan={3}>Total before VAT</Table.Td>
+                        <Table.Td>{fmtCurrency((lp.costingItems ?? []).reduce((s, i) => s + i.total, 0))}</Table.Td>
+                        <Table.Td />
+                      </Table.Tr>
+                    </Table.Tbody>
+                  </Table>
+                )}
               </Paper>
 
               {/* Key Milestone Dates (R2) */}
@@ -366,16 +415,19 @@ export default function LiveProjectDetailPage() {
                         <Table.Td>{fmtCurrency(inv.amount)}</Table.Td>
                         <Table.Td>{fmtDate(inv.dueDate)}</Table.Td>
                         <Table.Td>
-                          <Tooltip label={inv.s3Key ? `Download: ${inv.fileName}` : 'Upload invoice PDF'}>
-                            <ActionIcon size="xs" variant="subtle"
-                              color={inv.s3Key ? 'blue' : 'gray'}
+                          {inv.s3Key ? (
+                            <Button size="xs" variant="light" color="green" leftSection={<IconDownload size={11} />}
                               loading={uploadingId === inv.id}
-                              onClick={() => inv.s3Key
-                                ? liveProjectsApi.downloadInvoice(lp.id, inv.id).catch(() => {})
-                                : triggerUpload('invoice', inv.id)}>
-                              {inv.s3Key ? <IconDownload size={12} /> : <IconUpload size={12} />}
-                            </ActionIcon>
-                          </Tooltip>
+                              onClick={() => liveProjectsApi.downloadInvoice(lp.id, inv.id).catch(() => {})}>
+                              PDF ✓
+                            </Button>
+                          ) : (
+                            <Button size="xs" variant="subtle" color="gray" leftSection={<IconUpload size={11} />}
+                              loading={uploadingId === inv.id}
+                              onClick={() => triggerUpload('invoice', inv.id)}>
+                              Upload
+                            </Button>
+                          )}
                         </Table.Td>
                         <Table.Td>
                           <ActionIcon size="xs" color="red" variant="subtle"
@@ -391,6 +443,25 @@ export default function LiveProjectDetailPage() {
                   </Table.Tbody>
                 </Table>
               </Paper>
+
+              {/* Stage gate summary bar — bottom of main column */}
+              {lp.stage === 'LQ' && (
+                <StageSummaryBar
+                  gates={stage2Gates}
+                  actionLabel="Move to Stage 3 — Survey & Drawings"
+                  actionColor="blue"
+                  onAction={handleAdvanceToStage3}
+                />
+              )}
+              {lp.stage === 'SD' && !lp.routingDecision && (
+                <StageSummaryBar
+                  gates={stage3Gates}
+                  actionLabel="All gates pass — route via sidebar"
+                  actionColor="violet"
+                  onAction={() => {}}
+                  actionDisabledOverride={true}
+                />
+              )}
 
               {/* Stage 3 fields (visible only in SD stage) */}
               {lp.stage === 'SD' && (
@@ -455,23 +526,19 @@ export default function LiveProjectDetailPage() {
                                 onChange={async v => { await liveProjectsApi.updateDrawing(lp.id, d.id, { status: v as DrawingStatus }); reload(); }} />
                             </Table.Td>
                             <Table.Td>
-                              <Group gap={4}>
-                                <Tooltip label={d.s3Key ? `Download: ${d.fileName}` : 'Upload drawing file'}>
-                                  <ActionIcon size="xs" variant="subtle"
-                                    color={d.s3Key ? 'blue' : 'gray'}
-                                    loading={uploadingId === d.id}
-                                    onClick={() => d.s3Key
-                                      ? liveProjectsApi.downloadDrawing(lp.id, d.id).catch(() => {})
-                                      : triggerUpload('drawing', d.id)}>
-                                    {d.s3Key ? <IconDownload size={12} /> : <IconUpload size={12} />}
-                                  </ActionIcon>
-                                </Tooltip>
-                                {d.s3Key && (
-                                  <Text size="xs" c="dimmed" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {d.fileName}
-                                  </Text>
-                                )}
-                              </Group>
+                              {d.s3Key ? (
+                                <Button size="xs" variant="light" color="green" leftSection={<IconDownload size={11} />}
+                                  loading={uploadingId === d.id}
+                                  onClick={() => liveProjectsApi.downloadDrawing(lp.id, d.id).catch(() => {})}>
+                                  {d.fileName ?? 'Download'} ✓
+                                </Button>
+                              ) : (
+                                <Button size="xs" variant="subtle" color="gray" leftSection={<IconUpload size={11} />}
+                                  loading={uploadingId === d.id}
+                                  onClick={() => triggerUpload('drawing', d.id)}>
+                                  Upload file
+                                </Button>
+                              )}
                             </Table.Td>
                             <Table.Td>
                               <ActionIcon size="xs" color="red" variant="subtle"
@@ -745,6 +812,8 @@ export default function LiveProjectDetailPage() {
         onAdded={async d => { await liveProjectsApi.addDrawing(lp.id, d); reload(); setAddDrawingOpen(false); }} />
       <AddInstallationItemModal opened={addInstOpen} onClose={() => setAddInstOpen(false)}
         onAdded={async item => { await liveProjectsApi.addInstallationItem(lp.id, item); reload(); setAddInstOpen(false); }} />
+      <AddCostingItemModal opened={addCostOpen} onClose={() => setAddCostOpen(false)}
+        onAdded={async item => { await liveProjectsApi.addCostingItem(lp.id, item); reload(); setAddCostOpen(false); }} />
       <AddComponentModal opened={addCompOpen} onClose={() => setAddCompOpen(false)}
         onAdded={async comp => { await liveProjectsApi.addComponent(lp.id, comp); reload(); setAddCompOpen(false); }} />
     </Container>
@@ -820,6 +889,29 @@ function AddComponentModal({ opened, onClose, onAdded }: { opened: boolean; onCl
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>Cancel</Button>
           <Button disabled={!name} onClick={() => onAdded({ componentName: name, qty: Number(qty), stockStatus: status, cost: cost ? Number(cost) : undefined })}>Add</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
+function AddCostingItemModal({ opened, onClose, onAdded }: { opened: boolean; onClose: () => void; onAdded: (i: any) => void }) {
+  const [description, setDescription] = useState('');
+  const [qty, setQty] = useState<number | string>(1);
+  const [unitCost, setUnitCost] = useState<number | string>('');
+  const total = Number(qty) * Number(unitCost);
+  return (
+    <Modal opened={opened} onClose={onClose} title="Add Costing Line" size="sm">
+      <Stack gap="md">
+        <TextInput label="Description" required placeholder="e.g. Fire Curtain FC120, Commissioning" value={description} onChange={e => setDescription(e.target.value)} />
+        <NumberInput label="Qty" value={qty} onChange={setQty} min={1} decimalScale={2} />
+        <NumberInput label="Unit Cost (£)" value={unitCost} onChange={setUnitCost} min={0} decimalScale={2} />
+        {Number(qty) > 0 && Number(unitCost) > 0 && (
+          <Text size="sm" c="dimmed">Line total: <strong>£{total.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong></Text>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>Cancel</Button>
+          <Button disabled={!description || !unitCost} onClick={() => onAdded({ description, qty: Number(qty), unitCost: Number(unitCost) })}>Add Line</Button>
         </Group>
       </Stack>
     </Modal>

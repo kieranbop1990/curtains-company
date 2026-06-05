@@ -9,6 +9,8 @@ import {
 import { IconArrowLeft, IconPlus, IconTrash, IconAlertCircle, IconRefresh } from '@tabler/icons-react';
 import { serviceQuotesApi } from 'src/api/service-operations';
 import { staffApi } from 'src/api/staff';
+import { assetsApi } from 'src/api/assets';
+import type { Asset } from 'src/types/asset';
 import type { ServiceQuote, ServiceQuoteStatus, ChaseEntry } from 'src/types/service-operations';
 
 const STATUS_STEPS: ServiceQuoteStatus[] = ['QUOTE_DRAFTED', 'SENT', 'CHASING', 'ORDER_PLACED', 'LIVE_CLOSED'];
@@ -46,6 +48,7 @@ export default function ServiceQuoteDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [chaseModalOpen, setChaseModalOpen] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [linkedAsset, setLinkedAsset] = useState<Asset | null>(null);
 
   // Chase form state
   const [chaseDate, setChaseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -65,6 +68,14 @@ export default function ServiceQuoteDetailPage() {
   }, [quoteId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (quote?.assetId) {
+      assetsApi.getAsset(quote.assetId).then(setLinkedAsset).catch(() => {});
+    } else {
+      setLinkedAsset(null);
+    }
+  }, [quote?.assetId]);
 
   useEffect(() => {
     staffApi.getAll().then(all => {
@@ -403,6 +414,41 @@ export default function ServiceQuoteDetailPage() {
                   ))}
                 </Stack>
               </Paper>
+
+              {/* Linked Asset */}
+              {(linkedAsset || quote.assetRef) && (
+                <Paper withBorder radius="md" p="lg">
+                  <Text fw={600} size="sm" mb="sm">Linked Asset</Text>
+                  {linkedAsset ? (
+                    <Stack gap="xs">
+                      <Group justify="space-between">
+                        <Text size="sm" fw={600}>{linkedAsset.assetRef}</Text>
+                        <Badge size="sm" color={
+                          linkedAsset.status === 'LIVE_ACTIVE' ? 'green' :
+                          linkedAsset.status === 'SERVICE_DUE' ? 'yellow' :
+                          linkedAsset.status === 'OVERDUE' ? 'red' : 'gray'
+                        } variant="light">{linkedAsset.status.replace('_', ' ')}</Badge>
+                      </Group>
+                      <Text size="xs" c="dimmed">{linkedAsset.systemType || '—'}</Text>
+                      <Text size="xs" c="dimmed">{linkedAsset.siteName || '—'}</Text>
+                      {linkedAsset.nextServiceDate && (
+                        <Text size="xs" c="dimmed">
+                          Next service: {new Date(linkedAsset.nextServiceDate).toLocaleDateString('en-GB')}
+                        </Text>
+                      )}
+                      <Button size="xs" variant="outline" mt="xs"
+                        onClick={() => navigate(`/dashboard/assets/${linkedAsset.id}`)}>
+                        View Asset Profile
+                      </Button>
+                    </Stack>
+                  ) : (
+                    <Stack gap="xs">
+                      <Text size="sm">{quote.assetRef}</Text>
+                      <Text size="xs" c="dimmed">Asset not found in system</Text>
+                    </Stack>
+                  )}
+                </Paper>
+              )}
 
               <Button variant="light" leftSection={<IconRefresh size={16} />}
                 onClick={load} loading={loading}>

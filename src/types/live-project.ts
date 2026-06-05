@@ -41,6 +41,14 @@ export interface LQComponent {
   cost: number | null;
 }
 
+export interface LQCostingItem {
+  id: string;
+  description: string;
+  qty: number;
+  unitCost: number;
+  total: number;
+}
+
 export interface LiveProject {
   id: string;
   lqRef: string;
@@ -86,6 +94,7 @@ export interface LiveProject {
   drawings: LQDrawing[];
   installationSchedule: LQInstallationItem[];
   components: LQComponent[];
+  costingItems: LQCostingItem[];
   createdAt: string;
   updatedAt: string;
 }

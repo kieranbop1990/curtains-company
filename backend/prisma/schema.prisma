@@ -366,12 +366,30 @@ model LiveProject {
   routingDecision      LQRoutingDecision?
   assigneeId           String?
   assigneeName         String?
+  daysOnSite           Int?
+  travelAllowancePpd   Float?
+  overnightAllowancePpd Float?
+  adminOverrideNotes   String?
+  adminOverrideBy      String?
+  qrCodeUrl            String?
   invoices             LQInvoice[]
   drawings             LQDrawing[]
   installationSchedule LQInstallationItem[]
   components           LQComponent[]
+  costingItems         LQCostingItem[]
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
+}
+
+model LQCostingItem {
+  id            String      @id @default(uuid())
+  liveProjectId String
+  liveProject   LiveProject @relation(fields: [liveProjectId], references: [id], onDelete: Cascade)
+  description   String
+  qty           Float       @default(1)
+  unitCost      Float       @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 model LQInvoice {
@@ -427,6 +445,17 @@ model LQComponent {
   updatedAt     DateTime    @updatedAt
 }
 
+model QuoteDocument {
+  id         String   @id @default(uuid())
+  quoteId    String
+  quote      Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  docType    String
+  fileName   String
+  s3Key      String
+  uploadedBy String?
+  uploadedAt DateTime @default(now())
+}
+
 model Quote {
   id               String        @id @default(uuid())
   quoteRef         String        @unique
@@ -448,8 +477,22 @@ model Quote {
   probabilityScore Int?
   orderValue       Float?
   notes            String?
+  chaseEntries     QuoteChaseEntry[]
+  documents        QuoteDocument[]
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+}
+
+model QuoteChaseEntry {
+  id             String   @id @default(uuid())
+  quoteId        String
+  quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  chaseDate      String
+  chasedBy       String
+  method         String?
+  outcome        String?
+  nextActionDate String?
+  createdAt      DateTime @default(now())
 }
 
 model Asset {
@@ -584,6 +627,15 @@ model ProductionSystem {
   cuttingList       Json?
   accessories       Json?
   qrCodeUrl         String?
+  barrelType        String?
+  installationType  String?
+  fabricAccommodation String?
+  bottomRail        String?
+  motorPosition     String?
+  installationSide  String?
+  firingRating      String?
+  loadingPlate      Boolean        @default(false)
+  droppingHeightBar Boolean        @default(false)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 }

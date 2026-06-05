@@ -123,4 +123,11 @@ export const liveProjectsApi = {
   async deleteComponent(id: string, compId: string) {
     return apiClient.del(`/api/live-projects/${id}/components/${compId}`);
   },
+
+  async addCostingItem(id: string, item: { description: string; qty: number; unitCost: number }) {
+    return apiClient.post(`/api/live-projects/${id}/costing-items`, item);
+  },
+  async deleteCostingItem(id: string, itemId: string) {
+    return apiClient.del(`/api/live-projects/${id}/costing-items/${itemId}`);
+  },
 };

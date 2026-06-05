@@ -5,9 +5,10 @@ import {
   NumberInput, TextInput, Textarea, Switch, Center, Loader, Alert,
   Divider, Tabs, Select, Modal, Radio,
 } from '@mantine/core';
-import { IconArrowLeft, IconAlertCircle, IconTool, IconShieldCheck, IconBox, IconFileText, IconCurrencyPound, IconClipboardList, IconTruck } from '@tabler/icons-react';
+import { IconArrowLeft, IconAlertCircle, IconTool, IconShieldCheck, IconBox, IconFileText, IconCurrencyPound, IconClipboardList, IconTruck, IconBuildingFactory2 } from '@tabler/icons-react';
 import { liveServicesApi } from 'src/api/service-operations';
 import { distributionApi } from 'src/api/distribution';
+import { productionPackApi } from 'src/api/production-pack';
 import { staffApi } from 'src/api/staff';
 import type { LiveService } from 'src/types/service-operations';
 import type { DistributionType } from 'src/types/distribution';
@@ -27,6 +28,7 @@ export default function LiveServiceDetailPage() {
   const [distModalOpen, setDistModalOpen] = useState(false);
   const [distType, setDistType] = useState<DistributionType>('COLLECTION');
   const [sendingToDist, setSendingToDist] = useState(false);
+  const [creatingPack, setCreatingPack] = useState(false);
   const [fieldEngineers, setFieldEngineers] = useState<{ value: string; label: string }[]>([]);
   const [officeStaff, setOfficeStaff] = useState<{ value: string; label: string }[]>([]);
 
@@ -391,13 +393,34 @@ export default function LiveServiceDetailPage() {
                         </Group>
                       ))}
                     </Stack>
+                    <Divider label="Route this job" labelPosition="center" />
+                    <Text size="xs" c="dimmed">Choose where this job goes next. Jobs needing new parts go to Production first. Jobs that are ready to ship or install go direct to Distribution.</Text>
+                    <Button
+                      color="orange"
+                      leftSection={<IconBuildingFactory2 size={16} />}
+                      disabled={!allChecked}
+                      loading={creatingPack}
+                      onClick={async () => {
+                        if (!lsId || !ls) return;
+                        setCreatingPack(true);
+                        try {
+                          const pack = await productionPackApi.create({ liveServiceId: lsId });
+                          navigate(`/dashboard/production-packs/${pack.id}`);
+                        } catch {
+                          setCreatingPack(false);
+                        }
+                      }}
+                    >
+                      {allChecked ? 'Send to Production (Stage 5)' : 'Complete all items first'}
+                    </Button>
                     <Button
                       color="green"
+                      variant="outline"
                       leftSection={<IconTruck size={16} />}
                       disabled={!allChecked}
                       onClick={() => setDistModalOpen(true)}
                     >
-                      {allChecked ? 'Send to Distribution' : 'Complete all items above'}
+                      {allChecked ? 'Skip Production — Send Direct to Distribution' : 'Complete all items first'}
                     </Button>
                   </Stack>
                 </Paper>

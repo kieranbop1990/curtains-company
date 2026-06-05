@@ -4,9 +4,12 @@ import {
   Container, Title, Stack, Group, Button, Paper, Text, Badge,
   Grid, Select, NumberInput, Textarea, TextInput, Alert,
   Divider, List, ThemeIcon, Loader, Center, Anchor, Breadcrumbs,
+  Table, ActionIcon, Modal,
 } from '@mantine/core';
-import { IconAlertCircle, IconCheck, IconChevronRight, IconArrowLeft } from '@tabler/icons-react';
+import { IconAlertCircle, IconCheck, IconChevronRight, IconArrowLeft, IconSend, IconPlus, IconTrash } from '@tabler/icons-react';
 import { quotesApi } from 'src/api/quotes';
+import { staffApi } from 'src/api/staff';
+import { StageProgress } from 'src/components/StageProgress';
 import type { Quote, QuoteStatus, EnquirySource } from 'src/types/quote';
 import { ENQUIRY_SOURCES } from 'src/types/quote';
 
@@ -72,6 +75,15 @@ export default function QuoteDetailPage() {
   const [editProb, setEditProb] = useState<number | string>('');
   const [probSaving, setProbSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [chaseOpen, setChaseOpen] = useState(false);
+  const [chaseDate, setChaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [chasedBy, setChasedBy] = useState('');
+  const [chaseMethod, setChaseMethod] = useState('');
+  const [chaseOutcome, setChaseOutcome] = useState('');
+  const [chaseNextDate, setChaseNextDate] = useState('');
+  const [chaseSaving, setChaseSaving] = useState(false);
+  const [officeStaff, setOfficeStaff] = useState<{ value: string; label: string }[]>([]);
 
   useEffect(() => {
     if (!quoteId) return;
@@ -81,6 +93,24 @@ export default function QuoteDetailPage() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [quoteId]);
+
+  useEffect(() => {
+    staffApi.getAll().then(all => {
+      setOfficeStaff(all.filter(s => s.active && (s.role === 'OFFICE_OPERATIONS' || s.role === 'ADMIN')).map(s => ({ value: s.name, label: s.name })));
+    });
+  }, []);
+
+  const addChaseEntry = async () => {
+    if (!quoteId || !chaseDate || !chasedBy) return;
+    setChaseSaving(true);
+    try {
+      await quotesApi.addChaseEntry(quoteId, { chaseDate, chasedBy, method: chaseMethod, outcome: chaseOutcome, nextActionDate: chaseNextDate || undefined });
+      const updated = await quotesApi.getQuote(quoteId);
+      setQuote(updated);
+      setChaseOpen(false);
+      setChasedBy(''); setChaseMethod(''); setChaseOutcome(''); setChaseNextDate('');
+    } finally { setChaseSaving(false); }
+  };
 
   const handleProbSave = async () => {
     if (!quote) return;
@@ -124,6 +154,8 @@ export default function QuoteDetailPage() {
   return (
     <Container size="xl" py="xl">
       <Stack gap="lg">
+        <StageProgress current="quotes" />
+
         <Breadcrumbs separator={<IconChevronRight size={14} />}>
           <Anchor onClick={() => navigate('/dashboard/quotes')} size="sm">Quotes</Anchor>
           <Text size="sm">{quote.quoteRef}</Text>
@@ -269,12 +301,50 @@ export default function QuoteDetailPage() {
                 />
               </Paper>
 
-              {/* Timeline placeholder */}
+              {/* Chase / CRM Log */}
               <Paper withBorder radius="md" p="lg">
-                <Title order={4} fw={600} mb="md">Timeline</Title>
-                <Text c="dimmed" size="sm">
-                  Created {fmtDate(quote.createdAt)} · Last updated {fmtDate(quote.updatedAt)}
-                </Text>
+                <Group justify="space-between" mb="md">
+                  <Title order={4} fw={600}>Chasing History</Title>
+                  <Button size="xs" variant="outline" leftSection={<IconPlus size={12} />}
+                    onClick={() => setChaseOpen(true)}>Add Entry</Button>
+                </Group>
+                {(quote.chaseEntries ?? []).length === 0 ? (
+                  <Text c="dimmed" size="sm">No chase entries yet. Created {fmtDate(quote.createdAt)}.</Text>
+                ) : (
+                  <Table striped withTableBorder withColumnBorders>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Date</Table.Th>
+                        <Table.Th>By</Table.Th>
+                        <Table.Th>Method</Table.Th>
+                        <Table.Th>Outcome</Table.Th>
+                        <Table.Th>Next Action</Table.Th>
+                        <Table.Th></Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {(quote.chaseEntries ?? []).map(e => (
+                        <Table.Tr key={e.id}>
+                          <Table.Td>{fmtDate(e.chaseDate)}</Table.Td>
+                          <Table.Td>{e.chasedBy}</Table.Td>
+                          <Table.Td>{e.method || '—'}</Table.Td>
+                          <Table.Td>{e.outcome || '—'}</Table.Td>
+                          <Table.Td>{fmtDate(e.nextActionDate)}</Table.Td>
+                          <Table.Td>
+                            <ActionIcon size="xs" color="red" variant="subtle"
+                              onClick={async () => {
+                                await quotesApi.deleteChaseEntry(quote.id, e.id);
+                                const updated = await quotesApi.getQuote(quote.id);
+                                setQuote(updated);
+                              }}>
+                              <IconTrash size={12} />
+                            </ActionIcon>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                )}
               </Paper>
 
               {/* What Happens Next */}
@@ -315,17 +385,38 @@ export default function QuoteDetailPage() {
                     </Button>
                   ))}
                 </Stack>
-                {quote.status === 'WON' && (
-                  <Button mt="md" color="blue" fullWidth
-                    onClick={async () => {
-                      try {
-                        const result = await quotesApi.convertToLq(quote.id);
-                        navigate(`/dashboard/live-projects/${result.liveProjectId}`);
-                      } catch (e: any) { setError(e.message); }
-                    }}>
-                    Convert to Live Quote
-                  </Button>
+              </Paper>
+
+              {/* Send to Live Quotes — the main stage CTA */}
+              <Paper withBorder radius="md" p="lg"
+                style={{ borderColor: quote.status === 'WON' ? 'var(--mantine-color-green-4)' : undefined }}>
+                <Title order={4} fw={600} mb="xs">Send to Live Quotes (LQ)</Title>
+                <Text size="xs" c="dimmed" mb="md">
+                  Once the quote is marked <strong>Won</strong>, convert it to a Stage 2 Live Quote. The LQ record will be pre-populated with all customer and site information from this quote.
+                </Text>
+                {quote.status !== 'WON' && (
+                  <Text size="xs" c="orange" mb="sm">Mark as Won first to enable this action.</Text>
                 )}
+                <Button
+                  fullWidth
+                  color="green"
+                  size="md"
+                  disabled={quote.status !== 'WON'}
+                  loading={converting}
+                  leftSection={<IconSend size={16} />}
+                  onClick={async () => {
+                    setConverting(true);
+                    try {
+                      const result = await quotesApi.convertToLq(quote.id);
+                      navigate(`/dashboard/live-projects/${result.liveProjectId}`);
+                    } catch (e: any) {
+                      setError(e.message);
+                      setConverting(false);
+                    }
+                  }}
+                >
+                  Send to Live Quotes (LQ)
+                </Button>
               </Paper>
 
               {/* Workflow Alerts */}
@@ -395,6 +486,22 @@ export default function QuoteDetailPage() {
           </Grid.Col>
         </Grid>
       </Stack>
+
+      <Modal opened={chaseOpen} onClose={() => setChaseOpen(false)} title="Add Chase Entry" size="sm">
+        <Stack gap="sm">
+          <TextInput label="Chase Date" type="date" required value={chaseDate} onChange={e => setChaseDate(e.target.value)} />
+          <Select label="Chased By" required placeholder="Select staff member"
+            data={officeStaff} searchable clearable
+            value={chasedBy || null} onChange={v => setChasedBy(v ?? '')} />
+          <TextInput label="Method" placeholder="Phone, Email, Visit…" value={chaseMethod} onChange={e => setChaseMethod(e.target.value)} />
+          <Textarea label="Outcome" value={chaseOutcome} onChange={e => setChaseOutcome(e.target.value)} />
+          <TextInput label="Next Action Date" type="date" value={chaseNextDate} onChange={e => setChaseNextDate(e.target.value)} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setChaseOpen(false)}>Cancel</Button>
+            <Button loading={chaseSaving} disabled={!chasedBy || !chaseDate} onClick={addChaseEntry}>Save</Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Container>
   );
 }

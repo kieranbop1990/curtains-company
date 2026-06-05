@@ -7,6 +7,8 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconAlertCircle, IconPlus, IconTrash, IconDownload } from '@tabler/icons-react';
 import { distributionApi } from 'src/api/distribution';
+import { SignaturePad } from 'src/components/SignaturePad';
+import { StageProgress } from 'src/components/StageProgress';
 import { staffApi } from 'src/api/staff';
 import type { DistributionJob, InstallationEngineer, PaymentMilestone, InstallationProgressStep } from 'src/types/distribution';
 import type { StaffMember } from 'src/types/staff';
@@ -170,14 +172,39 @@ export default function DistributionJobDetailPage() {
   return (
     <Container size="xl" py="xl">
       <Stack gap="lg">
+        <StageProgress current="distribution" />
         <Group justify="space-between">
           <Group>
             <Button variant="subtle" leftSection={<IconArrowLeft size={16} />}
               onClick={() => navigate(-1)}>Back</Button>
             <Title order={2} fw={700}>{dj.djRef}</Title>
-            <Badge color="blue" variant="light">{DIST_LABELS[dj.distributionType]}</Badge>
+            <Badge color={dj.djStatus === 'CLOSED' ? 'gray' : 'blue'} variant="light">
+              {dj.djStatus === 'CLOSED' ? 'Closed' : DIST_LABELS[dj.distributionType]}
+            </Badge>
             {dj.customerName && <Text c="dimmed" size="sm">{dj.customerName}</Text>}
           </Group>
+          {dj.djStatus !== 'CLOSED' && (() => {
+            const canClose =
+              (dj.distributionType === 'COLLECTION' && !!dj.collectionSignature) ||
+              (dj.distributionType === 'DELIVERY' && !!dj.deliverySignature) ||
+              (dj.distributionType === 'INSTALLATION' && dj.handoverRamsFiledChecked && dj.handoverTeamSignedOff);
+            return (
+              <Button
+                color="green"
+                disabled={!canClose}
+                title={canClose ? undefined : 'Complete sign-off steps first'}
+                onClick={async () => {
+                  await distributionApi.update(dj.id, { djStatus: 'CLOSED' });
+                  load();
+                }}
+              >
+                Mark Project Complete &amp; Close
+              </Button>
+            );
+          })()}
+          {dj.djStatus === 'CLOSED' && (
+            <Badge color="gray" variant="filled" size="lg">Project Closed</Badge>
+          )}
         </Group>
 
         {/* Live Alerts Panel (T-140) */}
@@ -251,10 +278,10 @@ export default function DistributionJobDetailPage() {
                       disabled={!packChecklistComplete} />
                   </Grid.Col>
                   <Grid.Col span={12}>
-                    <Textarea label="Customer Signature (captured)" value={dj.collectionSignature ?? ''}
-                      onChange={(e) => save({ collectionSignature: e.currentTarget.value })}
-                      disabled={!packChecklistComplete}
-                      placeholder="Signature data / confirmation reference" />
+                    {packChecklistComplete
+                      ? <SignaturePad label="Customer Signature" onChange={dataUrl => { if (dataUrl) save({ collectionSignature: dataUrl }); }} />
+                      : <Text size="sm" c="dimmed">Complete pack checklist above to enable signature capture.</Text>
+                    }
                   </Grid.Col>
                 </Grid>
                 {dj.collectionSignature && (
@@ -337,10 +364,10 @@ export default function DistributionJobDetailPage() {
                 {!deliveryChecklistComplete && (
                   <Text size="sm" c="orange">Complete pack pick checklist to enable sign-off.</Text>
                 )}
-                <Textarea label="Customer Signature" value={dj.deliverySignature ?? ''}
-                  onChange={(e) => save({ deliverySignature: e.currentTarget.value })}
-                  disabled={!deliveryChecklistComplete}
-                  placeholder="Signature data / confirmation reference" />
+                {deliveryChecklistComplete
+                  ? <SignaturePad label="Customer Signature" onChange={dataUrl => { if (dataUrl) save({ deliverySignature: dataUrl }); }} />
+                  : <Text size="sm" c="dimmed">Complete pack checklist above to enable signature capture.</Text>
+                }
                 <TextInput label="Signed Off At" type="datetime-local"
                   defaultValue={dj.deliverySignedOffAt ? dj.deliverySignedOffAt.slice(0, 16) : ''}
                   onBlur={(e) => save({ deliverySignedOffAt: e.currentTarget.value || null })}

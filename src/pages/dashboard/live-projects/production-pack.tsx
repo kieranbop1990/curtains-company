@@ -12,6 +12,9 @@ import {
   IconClipboardCheck, IconPackage, IconTag, IconDatabase,
 } from '@tabler/icons-react';
 import { productionPackApi } from 'src/api/production-pack';
+import { liveProjectsApi } from 'src/api/live-projects';
+import { StageProgress } from 'src/components/StageProgress';
+import { liveServicesApi } from 'src/api/service-operations';
 import type { ProductionPack, ProductionSystem, SystemFamily, CuttingListItem } from 'src/types/production-pack';
 
 const DEFAULT_FORMULA_CONFIG = {
@@ -87,6 +90,7 @@ export default function ProductionPackPage() {
   const [formulaConfig, setFormulaConfig] = useState({ ...DEFAULT_FORMULA_CONFIG });
   const [formulaSaving, setFormulaSaving] = useState(false);
   const [qcChecks, setQcChecks] = useState<Record<string, Record<string, boolean>>>({});
+  const [projectContext, setProjectContext] = useState<{ ref: string; customer: string; pm: string } | null>(null);
 
   const load = useCallback(() => {
     if (!packId) return;
@@ -98,6 +102,19 @@ export default function ProductionPackPage() {
   }, [packId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!pack) return;
+    if (pack.liveProjectId) {
+      liveProjectsApi.get(pack.liveProjectId)
+        .then(lp => setProjectContext({ ref: lp.lqRef, customer: lp.customerName, pm: lp.assigneeName || '—' }))
+        .catch(() => {});
+    } else if (pack.liveServiceId) {
+      liveServicesApi.get(pack.liveServiceId)
+        .then(ls => setProjectContext({ ref: ls.lsRef, customer: ls.customerName || '—', pm: ls.accountManager || '—' }))
+        .catch(() => {});
+    }
+  }, [pack?.id]);
 
   const activeSystem: ProductionSystem | null = pack?.systems[activeSystemIdx] ?? null;
 
@@ -159,12 +176,23 @@ export default function ProductionPackPage() {
   return (
     <Container size="xl" py="xl">
       <Stack gap="lg">
+        <StageProgress current="production-pack" />
         <Group justify="space-between">
           <Group>
             <Button variant="subtle" leftSection={<IconArrowLeft size={16} />}
               onClick={() => navigate(-1)}>Back</Button>
-            <Title order={2} fw={700}>{pack.packRef}</Title>
-            <Badge color="blue" variant="light">{pack.status}</Badge>
+            <Stack gap={2}>
+              <Group gap="sm">
+                <Title order={2} fw={700}>{pack.packRef}</Title>
+                <Badge color="blue" variant="light">{pack.status}</Badge>
+              </Group>
+              {projectContext && (
+                <Text size="sm" c="dimmed">
+                  {projectContext.ref} · {projectContext.customer}
+                  {projectContext.pm && projectContext.pm !== '—' && ` · PM: ${projectContext.pm}`}
+                </Text>
+              )}
+            </Stack>
           </Group>
           <Stack gap={4} align="flex-end">
             <Group gap="xs">
@@ -185,6 +213,36 @@ export default function ProductionPackPage() {
             )}
           </Stack>
         </Group>
+
+        {/* Right-side project summary */}
+        {projectContext && (
+          <Paper withBorder radius="md" p="md" bg="blue.0">
+            <Group gap="xl" wrap="wrap">
+              <Stack gap={2}>
+                <Text size="xs" c="dimmed">Project Ref</Text>
+                <Text size="sm" fw={600}>{projectContext.ref}</Text>
+              </Stack>
+              <Stack gap={2}>
+                <Text size="xs" c="dimmed">Customer</Text>
+                <Text size="sm" fw={600}>{projectContext.customer}</Text>
+              </Stack>
+              {projectContext.pm !== '—' && (
+                <Stack gap={2}>
+                  <Text size="xs" c="dimmed">Project Manager</Text>
+                  <Text size="sm" fw={600}>{projectContext.pm}</Text>
+                </Stack>
+              )}
+              <Stack gap={2}>
+                <Text size="xs" c="dimmed">Systems</Text>
+                <Text size="sm" fw={600}>{pack.systems.length}</Text>
+              </Stack>
+              <Stack gap={2}>
+                <Text size="xs" c="dimmed">Pack Status</Text>
+                <Badge color="blue" variant="light">{pack.status}</Badge>
+              </Stack>
+            </Group>
+          </Paper>
+        )}
 
         {/* System navigation (T-092) */}
         <Paper withBorder radius="md" p="md">
@@ -265,6 +323,71 @@ export default function ProductionPackPage() {
                       <NumberInput label="Height (mm)" required min={0}
                         value={activeSystem.heightMm ?? ''}
                         onChange={(v) => updateSystem({ heightMm: typeof v === 'number' ? v : null })} />
+                    </Grid.Col>
+                    <Grid.Col span={6}>
+                      <Select label="Barrel Type" clearable
+                        data={['SINGLE', 'DOUBLE', 'TRIPLE'].map(v => ({ value: v, label: `${v.charAt(0)}${v.slice(1).toLowerCase()} Barrel` }))}
+                        value={activeSystem.barrelType}
+                        onChange={v => updateSystem({ barrelType: v })} />
+                    </Grid.Col>
+                    <Grid.Col span={6}>
+                      <Select label="Installation Type" clearable
+                        data={[
+                          { value: 'SURFACE', label: 'Surface Mount' },
+                          { value: 'RECESSED', label: 'Recessed' },
+                          { value: 'CAVITY', label: 'Cavity' },
+                          { value: 'EXPOSED', label: 'Exposed' },
+                        ]}
+                        value={activeSystem.installationType}
+                        onChange={v => updateSystem({ installationType: v })} />
+                    </Grid.Col>
+                    <Grid.Col span={6}>
+                      <Select label="Fabric Accommodation" clearable
+                        data={[
+                          { value: 'STANDARD', label: 'Standard' },
+                          { value: 'EXTENDED', label: 'Extended' },
+                          { value: 'COMPACT', label: 'Compact' },
+                        ]}
+                        value={activeSystem.fabricAccommodation}
+                        onChange={v => updateSystem({ fabricAccommodation: v })} />
+                    </Grid.Col>
+                    <Grid.Col span={6}>
+                      <Select label="Bottom Rail" clearable
+                        data={[
+                          { value: 'STANDARD', label: 'Standard Bottom Rail' },
+                          { value: 'WEIGHTED', label: 'Weighted Bottom Rail' },
+                          { value: 'NONE', label: 'None' },
+                        ]}
+                        value={activeSystem.bottomRail}
+                        onChange={v => updateSystem({ bottomRail: v })} />
+                    </Grid.Col>
+                    <Grid.Col span={6}>
+                      <Select label="Motor Position" clearable
+                        data={['LEFT', 'RIGHT', 'CENTRE'].map(v => ({ value: v, label: v.charAt(0) + v.slice(1).toLowerCase() }))}
+                        value={activeSystem.motorPosition}
+                        onChange={v => updateSystem({ motorPosition: v })} />
+                    </Grid.Col>
+                    <Grid.Col span={6}>
+                      <Select label="Installation Side" clearable
+                        data={['LEFT', 'RIGHT', 'BOTH'].map(v => ({ value: v, label: v.charAt(0) + v.slice(1).toLowerCase() }))}
+                        value={activeSystem.installationSide}
+                        onChange={v => updateSystem({ installationSide: v })} />
+                    </Grid.Col>
+                    <Grid.Col span={6}>
+                      <Select label="Firing Rating" clearable
+                        data={['FC30', 'FC60', 'FC90', 'FC120', 'FC180', 'FC240'].map(v => ({ value: v, label: v }))}
+                        value={activeSystem.firingRating}
+                        onChange={v => updateSystem({ firingRating: v })} />
+                    </Grid.Col>
+                    <Grid.Col span={3}>
+                      <Switch label="Loading Plate"
+                        checked={activeSystem.loadingPlate}
+                        onChange={e => updateSystem({ loadingPlate: e.currentTarget.checked })} />
+                    </Grid.Col>
+                    <Grid.Col span={3}>
+                      <Switch label="Dropping Height Bar"
+                        checked={activeSystem.droppingHeightBar}
+                        onChange={e => updateSystem({ droppingHeightBar: e.currentTarget.checked })} />
                     </Grid.Col>
                     <Grid.Col span={12}>
                       <Textarea label="Notes / Special Instructions"

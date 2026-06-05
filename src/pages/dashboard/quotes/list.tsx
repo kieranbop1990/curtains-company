@@ -110,20 +110,36 @@ export default function QuoteListPage() {
         </Group>
 
         {/* KPI Strip */}
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <Paper withBorder radius="md" p="md">
-            <Text size="sm" c="dimmed">Total Quotes</Text>
-            <Title order={3} fw={700}>{kpis.total}</Title>
-          </Paper>
-          <Paper withBorder radius="md" p="md">
-            <Text size="sm" c="dimmed">Total Value</Text>
-            <Title order={3} fw={700}>{fmt(kpis.totalValue)}</Title>
-          </Paper>
-          <Paper withBorder radius="md" p="md">
-            <Text size="sm" c="dimmed">Average Quote Value</Text>
-            <Title order={3} fw={700}>{fmt(kpis.avgValue)}</Title>
-          </Paper>
-        </SimpleGrid>
+        {(() => {
+          const now = new Date();
+          const weekAhead = new Date(now); weekAhead.setDate(weekAhead.getDate() + 7);
+          const overdue = quotes.filter(q => q.nextActionDate && new Date(q.nextActionDate) < now && q.status !== 'WON' && q.status !== 'LOST').length;
+          const dueThisWeek = quotes.filter(q => {
+            if (!q.nextActionDate || q.status === 'WON' || q.status === 'LOST') return false;
+            const d = new Date(q.nextActionDate);
+            return d >= now && d <= weekAhead;
+          }).length;
+          const weightedValue = quotes.reduce((s, q) => s + (q.orderValue ?? 0) * ((q.probabilityScore ?? 50) / 100), 0);
+          const wonThisMonth = quotes.filter(q => q.status === 'WON' && new Date(q.updatedAt).getMonth() === now.getMonth() && new Date(q.updatedAt).getFullYear() === now.getFullYear()).length;
+          const pills = [
+            { label: 'Total Quotes', value: kpis.total, color: undefined },
+            { label: 'Total Value', value: fmt(kpis.totalValue), color: undefined },
+            { label: 'Weighted Value', value: fmt(weightedValue), color: undefined },
+            { label: 'Overdue Actions', value: overdue, color: overdue > 0 ? 'red' : undefined },
+            { label: 'Due This Week', value: dueThisWeek, color: dueThisWeek > 0 ? 'orange' : undefined },
+            { label: 'Won This Month', value: wonThisMonth, color: 'green' },
+          ];
+          return (
+            <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }}>
+              {pills.map(p => (
+                <Paper key={p.label} withBorder radius="md" p="md">
+                  <Text size="xs" c="dimmed">{p.label}</Text>
+                  <Title order={3} fw={700} c={p.color}>{p.value}</Title>
+                </Paper>
+              ))}
+            </SimpleGrid>
+          );
+        })()}
 
         {/* Filters */}
         <Group gap="sm">

@@ -6,6 +6,7 @@ import { logStageTransition } from '../lib/audit.js';
 import { getXeroAccessToken, getInvoiceStatus } from '../lib/xero.js';
 import { sendEmail } from '../lib/email.js';
 import { getPresignedUploadUrl, getPresignedDownloadUrl } from '../lib/s3.js';
+import { generateQrCodeDataUrl } from '../lib/qr.js';
 import type { DrawingStatus, ReviewStatus, LQRoutingDecision } from '@prisma/client';
 
 export const liveProjectsRoutes = new Hono();
@@ -57,6 +58,12 @@ function formatLiveProject(lp: any) {
     routingDecision: lp.routingDecision ?? null,
     assigneeId: lp.assigneeId ?? '',
     assigneeName: lp.assigneeName ?? '',
+    daysOnSite: lp.daysOnSite ?? null,
+    travelAllowancePpd: lp.travelAllowancePpd ?? null,
+    overnightAllowancePpd: lp.overnightAllowancePpd ?? null,
+    adminOverrideNotes: lp.adminOverrideNotes ?? null,
+    adminOverrideBy: lp.adminOverrideBy ?? null,
+    qrCodeUrl: lp.qrCodeUrl ?? null,
     invoices: (lp.invoices ?? []).map((i: any) => ({
       id: i.id, invoiceNumber: i.invoiceNumber, status: i.status,
       amount: i.amount, dueDate: i.dueDate ?? null, xeroInvoiceId: i.xeroInvoiceId ?? null,
@@ -75,6 +82,10 @@ function formatLiveProject(lp: any) {
       id: c.id, componentName: c.componentName, qty: c.qty,
       stockStatus: c.stockStatus, cost: c.cost ?? null,
     })),
+    costingItems: (lp.costingItems ?? []).map((c: any) => ({
+      id: c.id, description: c.description, qty: c.qty, unitCost: c.unitCost,
+      total: c.qty * c.unitCost,
+    })),
     createdAt: lp.createdAt,
     updatedAt: lp.updatedAt,
   };
@@ -85,6 +96,7 @@ const withRelations = {
   drawings: { orderBy: { createdAt: 'asc' as const } },
   installationSchedule: { orderBy: { createdAt: 'asc' as const } },
   components: { orderBy: { createdAt: 'asc' as const } },
+  costingItems: { orderBy: { createdAt: 'asc' as const } },
 };
 
 // List
@@ -460,5 +472,47 @@ liveProjectsRoutes.patch('/:id/components/:compId', requireRole(...PERMISSIONS.f
 
 liveProjectsRoutes.delete('/:id/components/:compId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   await prisma.lQComponent.delete({ where: { id: c.req.param('compId') } });
+  return c.json({ ok: true });
+});
+
+// QR code generation for LQ
+liveProjectsRoutes.get('/:id/qr-code', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const lp = await prisma.liveProject.findUnique({ where: { id: c.req.param('id') } });
+  if (!lp) return c.json({ error: 'Not found' }, 404);
+  const url = `${process.env.APP_URL ?? 'https://app.firecurtains.local'}/dashboard/live-projects/${lp.id}`;
+  const dataUrl = await generateQrCodeDataUrl(url);
+  await prisma.liveProject.update({ where: { id: lp.id }, data: { qrCodeUrl: dataUrl } });
+  return c.json({ qrCodeUrl: dataUrl, url });
+});
+
+// Costing Items
+liveProjectsRoutes.post('/:id/costing-items', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const body = await c.req.json();
+  const item = await prisma.lQCostingItem.create({
+    data: {
+      liveProjectId: c.req.param('id'),
+      description: body.description,
+      qty: Number(body.qty) || 1,
+      unitCost: Number(body.unitCost) || 0,
+    },
+  });
+  return c.json({ ...item, total: item.qty * item.unitCost }, 201);
+});
+
+liveProjectsRoutes.patch('/:id/costing-items/:itemId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const body = await c.req.json();
+  const item = await prisma.lQCostingItem.update({
+    where: { id: c.req.param('itemId') },
+    data: {
+      description: body.description,
+      qty: body.qty != null ? Number(body.qty) : undefined,
+      unitCost: body.unitCost != null ? Number(body.unitCost) : undefined,
+    },
+  });
+  return c.json({ ...item, total: item.qty * item.unitCost });
+});
+
+liveProjectsRoutes.delete('/:id/costing-items/:itemId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  await prisma.lQCostingItem.delete({ where: { id: c.req.param('itemId') } });
   return c.json({ ok: true });
 });

@@ -1,5 +1,14 @@
 export type QuoteStatus = 'NEW' | 'ACTIVE' | 'WON' | 'LOST';
 
+export interface QuoteChaseEntry {
+  id: string;
+  chaseDate: string;
+  chasedBy: string;
+  method: string;
+  outcome: string;
+  nextActionDate: string | null;
+}
+
 export const ENQUIRY_SOURCES = [
   'REFERRAL',
   'WEBSITE',
@@ -32,6 +41,7 @@ export interface Quote {
   probabilityScore: number | null;
   orderValue: number | null;
   notes: string;
+  chaseEntries: QuoteChaseEntry[];
   createdAt: string;
   updatedAt: string;
 }

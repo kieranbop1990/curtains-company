@@ -39,6 +39,10 @@ function formatQuote(q: any) {
     probabilityScore: q.probabilityScore ?? null,
     orderValue: q.orderValue ?? null,
     notes: q.notes ?? '',
+    chaseEntries: (q.chaseEntries ?? []).map((e: any) => ({
+      id: e.id, chaseDate: e.chaseDate, chasedBy: e.chasedBy,
+      method: e.method ?? '', outcome: e.outcome ?? '', nextActionDate: e.nextActionDate ?? null,
+    })),
     createdAt: q.createdAt,
     updatedAt: q.updatedAt,
   };
@@ -56,7 +60,7 @@ quotesRoutes.get('/', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
       { productType: { contains: search, mode: 'insensitive' } },
     ];
   }
-  const quotes = await prisma.quote.findMany({ where, orderBy: { createdAt: 'desc' } });
+  const quotes = await prisma.quote.findMany({ where, orderBy: { createdAt: 'desc' }, include: { chaseEntries: { orderBy: { createdAt: 'asc' } } } });
   const total = quotes.length;
   const totalValue = quotes.reduce((sum, q) => sum + (q.orderValue ?? 0), 0);
   const avgValue = total > 0 ? totalValue / total : 0;
@@ -64,7 +68,10 @@ quotesRoutes.get('/', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
 });
 
 quotesRoutes.get('/:id', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
-  const quote = await prisma.quote.findUnique({ where: { id: c.req.param('id') } });
+  const quote = await prisma.quote.findUnique({
+    where: { id: c.req.param('id') },
+    include: { chaseEntries: { orderBy: { createdAt: 'asc' } } },
+  });
   if (!quote) return c.json({ error: 'Not found' }, 404);
   return c.json(formatQuote(quote));
 });
@@ -96,6 +103,27 @@ quotesRoutes.post('/', requireRole(...PERMISSIONS.fullCrm as any), async (c) => 
     },
   });
   return c.json(formatQuote(quote), 201);
+});
+
+// Chase entries for LG quotes
+quotesRoutes.post('/:id/chase-entries', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const body = await c.req.json();
+  const entry = await prisma.quoteChaseEntry.create({
+    data: {
+      quoteId: c.req.param('id'),
+      chaseDate: body.chaseDate,
+      chasedBy: body.chasedBy,
+      method: body.method || null,
+      outcome: body.outcome || null,
+      nextActionDate: body.nextActionDate || null,
+    },
+  });
+  return c.json(entry, 201);
+});
+
+quotesRoutes.delete('/:id/chase-entries/:entryId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  await prisma.quoteChaseEntry.delete({ where: { id: c.req.param('entryId') } });
+  return c.json({ ok: true });
 });
 
 // Convert Won quote to LQ (T-043, T-045 - workflow trigger R3)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Container, Title, Stack, Group, Button, Paper, Table, Badge,
-  Center, Loader, Text, Progress, Grid, SimpleGrid, Tabs, Anchor,
+  Center, Loader, Text, Progress, Grid, SimpleGrid, Tabs, RingProgress,
 } from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
@@ -41,12 +41,21 @@ export default function ServiceOperationsListPage() {
     serviceQuotesApi.getAll().then(setQuotes).finally(() => setLoading(false));
   }, []);
 
-  // T-182: Pipeline KPIs by service type
-  const adminAccess = quotes.filter(q => q.serviceCategory?.toLowerCase().includes('admin') || q.contractType?.toLowerCase().includes('admin'));
-  const annualService = quotes.filter(q => q.frequency === 'ANNUAL' || q.serviceCategory?.toLowerCase().includes('annual'));
-  const storageServices = quotes.filter(q => q.serviceCategory?.toLowerCase().includes('storage'));
-
+  // KPIs matching design
+  const now = new Date();
+  const servicesDue = quotes.filter(q => q.status === 'CHASING').length;
+  const servicesRenewed = quotes.filter(q => q.status === 'LIVE_CLOSED').length;
+  const awaitingAccess = quotes.filter(q => q.status === 'ORDER_PLACED').length;
+  const overdueServices = quotes.filter(q => {
+    if (q.status !== 'CHASING') return false;
+    const lastChase = q.chaseEntries?.slice(-1)[0];
+    if (!lastChase?.nextActionDate) return false;
+    return new Date(lastChase.nextActionDate) < now;
+  }).length;
   const monthlyValue = quotes.reduce((s, q) => s + (q.serviceRate ?? 0), 0);
+  const forecastRenewals = quotes
+    .filter(q => q.autoRenewal && q.status !== 'LIVE_CLOSED')
+    .reduce((s, q) => s + (q.annualRevenueIncVat ?? 0), 0);
   const annualValue = quotes.reduce((s, q) => s + (q.annualRevenueIncVat ?? 0), 0);
 
   // T-186: Contract summary
@@ -115,19 +124,19 @@ export default function ServiceOperationsListPage() {
           </Button>
         </Group>
 
-        {/* T-182: Pipeline KPIs by service type */}
-        <SimpleGrid cols={6} spacing="sm">
+        {/* KPI Strip */}
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="sm">
           {[
-            ['Total Quotes', quotes.length],
-            ['Admin Access', adminAccess.length],
-            ['Annual Service', annualService.length],
-            ['Storage Services', storageServices.length],
-            ['Monthly Revenue', fmtCurrency(monthlyValue)],
-            ['Annual Revenue', fmtCurrency(annualValue)],
-          ].map(([label, value]) => (
-            <Paper key={label as string} withBorder radius="md" p="md">
-              <Text size="xs" c="dimmed">{label}</Text>
-              <Text fw={700} size="lg">{value}</Text>
+            { label: 'Services Due', value: servicesDue, color: servicesDue > 0 ? 'orange' : undefined },
+            { label: 'Services Renewed', value: servicesRenewed, color: 'green' },
+            { label: 'Awaiting Access', value: awaitingAccess, color: undefined },
+            { label: 'Overdue', value: overdueServices, color: overdueServices > 0 ? 'red' : undefined },
+            { label: 'Monthly Service Value', value: fmtCurrency(monthlyValue), color: undefined },
+            { label: 'Forecast Renewals', value: fmtCurrency(forecastRenewals), color: undefined },
+          ].map(p => (
+            <Paper key={p.label} withBorder radius="md" p="md">
+              <Text size="xs" c="dimmed">{p.label}</Text>
+              <Text fw={700} size="lg" c={p.color}>{p.value}</Text>
             </Paper>
           ))}
         </SimpleGrid>
@@ -165,73 +174,114 @@ export default function ServiceOperationsListPage() {
             <Tabs.Tab value="sla">SLA Tracking</Tabs.Tab>
           </Tabs.List>
 
-          {/* T-183: Pipeline table */}
+          {/* Pipeline table + renewal donut */}
           <Tabs.Panel value="pipeline" pt="md">
-            <Paper withBorder radius="md">
-              {loading ? <Center p="xl"><Loader /></Center> : quotes.length === 0 ? (
-                <Center p="xl"><Text c="dimmed" size="sm">No service quotes yet.</Text></Center>
-              ) : (
-                <Table striped highlightOnHover withTableBorder withColumnBorders>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Ref</Table.Th>
-                      <Table.Th>Customer</Table.Th>
-                      <Table.Th>Site / Asset</Table.Th>
-                      <Table.Th>Service Type</Table.Th>
-                      <Table.Th>Frequency</Table.Th>
-                      <Table.Th>Annual Value</Table.Th>
-                      <Table.Th>SLA Response</Table.Th>
-                      <Table.Th>SLA Resolution</Table.Th>
-                      <Table.Th>Status</Table.Th>
-                      <Table.Th>Probability</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {quotes.map(q => {
-                      const responseBreach = slaBreached(q.slaResponse, q.createdAt);
-                      const resolutionBreach = slaBreached(q.slaResolution, q.createdAt);
-                      return (
-                        <Table.Tr key={q.id} style={{ cursor: 'pointer' }}
-                          onClick={() => navigate(`/dashboard/service-operations/${q.id}`)}>
-                          <Table.Td><Text size="sm" fw={600}>{q.sQuoteRef}</Text></Table.Td>
-                          <Table.Td>{q.customerName}</Table.Td>
-                          <Table.Td>{q.assetRef || '—'}</Table.Td>
-                          <Table.Td>{q.serviceCategory || '—'}</Table.Td>
-                          <Table.Td>{q.frequency ?? '—'}</Table.Td>
-                          <Table.Td>{fmtCurrency(q.annualRevenueIncVat)}</Table.Td>
-                          <Table.Td>
-                            <Group gap="xs">
-                              <Text size="xs">{q.slaResponse || '—'}</Text>
-                              {responseBreach && <Badge size="xs" color="red">Breach</Badge>}
-                            </Group>
-                          </Table.Td>
-                          <Table.Td>
-                            <Group gap="xs">
-                              <Text size="xs">{q.slaResolution || '—'}</Text>
-                              {resolutionBreach && <Badge size="xs" color="red">Breach</Badge>}
-                            </Group>
-                          </Table.Td>
-                          <Table.Td>
-                            <Badge color={STATUS_COLOR[q.status]} variant="light" size="sm">
-                              {STATUS_LABELS[q.status]}
-                            </Badge>
-                          </Table.Td>
-                          <Table.Td>
-                            {q.probability != null ? (
-                              <Group gap="xs" align="center">
-                                <Progress value={q.probability} size="sm" style={{ flex: 1, minWidth: 60 }}
-                                  color={q.probability >= 70 ? 'green' : q.probability >= 40 ? 'yellow' : 'red'} />
-                                <Text size="xs" w={32}>{q.probability}%</Text>
-                              </Group>
-                            ) : '—'}
-                          </Table.Td>
+            <Grid gap="lg">
+              <Grid.Col span={{ base: 12, md: 9 }}>
+                <Paper withBorder radius="md">
+                  {loading ? <Center p="xl"><Loader /></Center> : quotes.length === 0 ? (
+                    <Center p="xl"><Text c="dimmed" size="sm">No service quotes yet.</Text></Center>
+                  ) : (
+                    <Table striped highlightOnHover withTableBorder withColumnBorders>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Ref</Table.Th>
+                          <Table.Th>Customer</Table.Th>
+                          <Table.Th>Asset</Table.Th>
+                          <Table.Th>Frequency</Table.Th>
+                          <Table.Th>Last Chased</Table.Th>
+                          <Table.Th>Next Action</Table.Th>
+                          <Table.Th>Renewal Value</Table.Th>
+                          <Table.Th>Status</Table.Th>
+                          <Table.Th>Probability</Table.Th>
                         </Table.Tr>
-                      );
-                    })}
-                  </Table.Tbody>
-                </Table>
-              )}
-            </Paper>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {quotes.map(q => {
+                          const lastChase = q.chaseEntries?.slice(-1)[0];
+                          const nextAction = lastChase?.nextActionDate;
+                          const isOverdue = nextAction && new Date(nextAction) < now;
+                          return (
+                            <Table.Tr key={q.id} style={{ cursor: 'pointer' }}
+                              onClick={() => navigate(`/dashboard/service-operations/${q.id}`)}>
+                              <Table.Td><Text size="sm" fw={600}>{q.sQuoteRef}</Text></Table.Td>
+                              <Table.Td><Text size="sm">{q.customerName}</Text></Table.Td>
+                              <Table.Td><Text size="sm" c="dimmed">{q.assetRef || '—'}</Text></Table.Td>
+                              <Table.Td><Text size="sm">{q.frequency ?? '—'}</Text></Table.Td>
+                              <Table.Td>
+                                <Text size="sm" c="dimmed">
+                                  {lastChase ? new Date(lastChase.chaseDate).toLocaleDateString('en-GB') : '—'}
+                                </Text>
+                              </Table.Td>
+                              <Table.Td>
+                                <Text size="sm" c={isOverdue ? 'red' : undefined} fw={isOverdue ? 600 : undefined}>
+                                  {nextAction ? new Date(nextAction).toLocaleDateString('en-GB') : '—'}
+                                  {isOverdue && ' ⚠'}
+                                </Text>
+                              </Table.Td>
+                              <Table.Td><Text size="sm">{fmtCurrency(q.annualRevenueIncVat)}</Text></Table.Td>
+                              <Table.Td>
+                                <Badge color={STATUS_COLOR[q.status]} variant="light" size="sm">
+                                  {STATUS_LABELS[q.status]}
+                                </Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                {q.probability != null ? (
+                                  <Group gap="xs" align="center">
+                                    <Progress value={q.probability} size="sm" style={{ flex: 1, minWidth: 50 }}
+                                      color={q.probability >= 70 ? 'green' : q.probability >= 40 ? 'yellow' : 'red'} />
+                                    <Text size="xs">{q.probability}%</Text>
+                                  </Group>
+                                ) : '—'}
+                              </Table.Td>
+                            </Table.Tr>
+                          );
+                        })}
+                      </Table.Tbody>
+                    </Table>
+                  )}
+                </Paper>
+              </Grid.Col>
+
+              {/* Renewal pipeline donut */}
+              <Grid.Col span={{ base: 12, md: 3 }}>
+                <Paper withBorder radius="md" p="lg">
+                  <Stack gap="md">
+                    <Text fw={600} size="sm">Renewal Pipeline</Text>
+                    {quotes.length > 0 && (
+                      <>
+                        <Center>
+                          <RingProgress size={140} thickness={18}
+                            label={<Text ta="center" size="xs" fw={700}>{quotes.length}{'\n'}total</Text>}
+                            sections={STATUS_STEPS.map(s => ({
+                              value: quotes.filter(q => q.status === s).length / quotes.length * 100,
+                              color: STATUS_COLOR[s],
+                              tooltip: `${STATUS_LABELS[s]}: ${quotes.filter(q => q.status === s).length}`,
+                            })).filter(s => s.value > 0)}
+                          />
+                        </Center>
+                        <Stack gap={4}>
+                          {STATUS_STEPS.map(s => {
+                            const count = quotes.filter(q => q.status === s).length;
+                            if (count === 0) return null;
+                            return (
+                              <Group key={s} justify="space-between">
+                                <Group gap={6}>
+                                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: `var(--mantine-color-${STATUS_COLOR[s]}-6)` }} />
+                                  <Text size="xs" c="dimmed">{STATUS_LABELS[s]}</Text>
+                                </Group>
+                                <Text size="xs" fw={600}>{count}</Text>
+                              </Group>
+                            );
+                          })}
+                        </Stack>
+                      </>
+                    )}
+                    {quotes.length === 0 && <Text size="xs" c="dimmed">No data</Text>}
+                  </Stack>
+                </Paper>
+              </Grid.Col>
+            </Grid>
           </Tabs.Panel>
 
           {/* T-184 + T-185: Financial + Engineer workload */}

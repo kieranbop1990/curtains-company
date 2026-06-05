@@ -26,4 +26,12 @@ export const quotesApi = {
   async convertToLq(id: string): Promise<{ liveProjectId: string; lqRef: string }> {
     return apiClient.post(`/api/quotes/${id}/convert-to-lq`);
   },
+
+  async addChaseEntry(id: string, entry: { chaseDate: string; chasedBy: string; method?: string; outcome?: string; nextActionDate?: string }) {
+    return apiClient.post(`/api/quotes/${id}/chase-entries`, entry);
+  },
+
+  async deleteChaseEntry(id: string, entryId: string) {
+    return apiClient.del(`/api/quotes/${id}/chase-entries/${entryId}`);
+  },
 };

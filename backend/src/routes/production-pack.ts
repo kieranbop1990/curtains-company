@@ -29,7 +29,13 @@ function formatSystem(s: any) {
     widthMm: s.widthMm, heightMm: s.heightMm,
     customerSupplied: s.customerSupplied, addManual: s.addManual, addWarrantyCard: s.addWarrantyCard,
     notes: s.notes, cuttingList: s.cuttingList, accessories: s.accessories,
-    qrCodeUrl: s.qrCodeUrl, createdAt: s.createdAt, updatedAt: s.updatedAt,
+    qrCodeUrl: s.qrCodeUrl,
+    barrelType: s.barrelType ?? null, installationType: s.installationType ?? null,
+    fabricAccommodation: s.fabricAccommodation ?? null, bottomRail: s.bottomRail ?? null,
+    motorPosition: s.motorPosition ?? null, installationSide: s.installationSide ?? null,
+    firingRating: s.firingRating ?? null,
+    loadingPlate: s.loadingPlate, droppingHeightBar: s.droppingHeightBar,
+    createdAt: s.createdAt, updatedAt: s.updatedAt,
   };
 }
 

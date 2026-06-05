@@ -12,6 +12,7 @@ import {
 } from '@tabler/icons-react';
 import { assetsApi } from 'src/api/assets';
 import { staffApi } from 'src/api/staff';
+import { StageProgress } from 'src/components/StageProgress';
 import type { Asset, AssetStatus, AssetPriority, AssetContact, AssetDocument } from 'src/types/asset';
 
 function computeServiceDates(
@@ -190,6 +191,8 @@ export default function AssetDetailPage() {
   return (
     <Container size="xl" py="xl">
       <Stack gap="lg">
+        <StageProgress current="asset" />
+
         <Breadcrumbs separator={<IconChevronRight size={14} />}>
           <Anchor onClick={() => navigate('/dashboard/assets')} size="sm">Assets</Anchor>
           <Text size="sm">{asset.assetRef}</Text>

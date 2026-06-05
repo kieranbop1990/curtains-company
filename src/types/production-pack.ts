@@ -21,6 +21,15 @@ export interface ProductionSystem {
   cuttingList: CuttingListItem[] | null;
   accessories: AccessoryItem[] | null;
   qrCodeUrl: string | null;
+  barrelType: string | null;
+  installationType: string | null;
+  fabricAccommodation: string | null;
+  bottomRail: string | null;
+  motorPosition: string | null;
+  installationSide: string | null;
+  firingRating: string | null;
+  loadingPlate: boolean;
+  droppingHeightBar: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -8,6 +8,7 @@ import {
 import { IconArrowLeft, IconAlertCircle, IconCheck, IconX } from '@tabler/icons-react';
 import { manufacturingApi } from 'src/api/production-pack';
 import { staffApi } from 'src/api/staff';
+import { StageProgress } from 'src/components/StageProgress';
 import type { ManufacturingJob, MfgStatus, MfgQcCheckpoint, MfgFabricRow, MfgComponent } from 'src/types/production-pack';
 
 const MFG_STATUS_STEPS: MfgStatus[] = [
@@ -122,6 +123,7 @@ export default function ManufacturingDetailPage() {
   return (
     <Container size="xl" py="xl">
       <Stack gap="lg">
+        <StageProgress current="manufacturing" />
         <Group justify="space-between">
           <Group>
             <Button variant="subtle" leftSection={<IconArrowLeft size={16} />}
@@ -312,26 +314,35 @@ export default function ManufacturingDetailPage() {
           <Grid.Col span={4}>
             <Stack gap="lg">
               {/* Release Gate Indicator (T-108, T-109) */}
-              <Paper withBorder radius="md" p="lg">
+              <Paper withBorder radius="md" p="lg"
+                style={{ borderColor: `var(--mantine-color-${releaseReady ? 'green' : 'red'}-4)` }}>
                 <Stack gap="sm">
-                  <Text fw={600} size="sm">Release to Engineer</Text>
-                  <Divider />
+                  <Text fw={600} size="sm">Release Checklist</Text>
                   {releaseChecklist.map((item) => (
-                    <Group key={item.key} justify="space-between">
-                      <Text size="sm">{item.label}</Text>
+                    <Group key={item.key} justify="space-between"
+                      p="xs" style={{ borderRadius: 6, background: item.value ? 'var(--mantine-color-green-0)' : undefined }}>
+                      <Group gap="xs">
+                        <ThemeIcon size="xs" radius="xl" color={item.value ? 'green' : 'gray'} variant="light">
+                          {item.value ? <IconCheck size={10} /> : <IconX size={10} />}
+                        </ThemeIcon>
+                        <Text size="sm" c={item.value ? undefined : 'dimmed'}>{item.label}</Text>
+                      </Group>
                       <Checkbox checked={item.value}
                         onChange={(e) => save({ [item.key]: e.currentTarget.checked } as any)} />
                     </Group>
                   ))}
-                  <Divider />
-                  <Group>
-                    <ThemeIcon color={releaseReady ? 'green' : 'red'} variant="light" size="sm">
-                      {releaseReady ? <IconCheck size={12} /> : <IconX size={12} />}
-                    </ThemeIcon>
-                    <Text fw={600} size="sm" c={releaseReady ? 'green' : 'red'}>
-                      {releaseReady ? 'Ready for Release' : 'Not Ready for Release'}
+                  <Paper radius="md" p="md"
+                    bg={releaseReady ? 'green' : 'red'}
+                    style={{ textAlign: 'center' }}>
+                    <Text fw={800} size="sm" c="white" tt="uppercase" style={{ letterSpacing: 1 }}>
+                      {releaseReady ? '✓ READY TO RELEASE TO ENGINEER' : '✗ NOT READY FOR RELEASE'}
                     </Text>
-                  </Group>
+                    {!releaseReady && (
+                      <Text size="xs" c="white" mt={4} style={{ opacity: 0.85 }}>
+                        {releaseChecklist.filter(i => !i.value).length} item{releaseChecklist.filter(i => !i.value).length > 1 ? 's' : ''} outstanding
+                      </Text>
+                    )}
+                  </Paper>
                 </Stack>
               </Paper>
 

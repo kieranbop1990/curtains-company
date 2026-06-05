@@ -186,6 +186,15 @@ serviceQuotesRoutes.post('/:id/chase-entries', requireRole(...PERMISSIONS.fullCr
   return c.json(entry, 201);
 });
 
+// Audit trail — reads from StageTransitionLog for this service quote
+serviceQuotesRoutes.get('/:id/audit', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
+  const entries = await prisma.stageTransitionLog.findMany({
+    where: { recordId: c.req.param('id') },
+    orderBy: { createdAt: 'desc' },
+  });
+  return c.json(entries);
+});
+
 serviceQuotesRoutes.delete('/:id/chase-entries/:entryId', requireRole(...PERMISSIONS.fullCrm as any), async (c) => {
   await prisma.chaseEntry.delete({ where: { id: c.req.param('entryId') } });
   return c.json({ ok: true });
